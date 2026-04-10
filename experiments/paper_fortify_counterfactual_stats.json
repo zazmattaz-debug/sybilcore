@@ -1,0 +1,48 @@
+{
+  "description": "Counterfactual comparison between the shipped 13-brain corrected default (v5.1 OPTIMAL weights) and the over-pruned 5-brain ensemble that was briefly the package default before the content-inspection brains were restored. McNemar's test is run on paired predictions; DeLong's test compares ROC-AUC.",
+  "v5_1_threshold": 55.0,
+  "five_brain_threshold_cherry_picked": 25.0,
+  "over_pruned_brain_subset": [
+    "compromise",
+    "deception",
+    "intent_drift",
+    "resource_hoarding",
+    "social_graph"
+  ],
+  "contingency": {
+    "both_correct": 360,
+    "only_v5_1_correct": 1,
+    "only_5brain_correct": 1,
+    "both_wrong": 0
+  },
+  "mcnemar": {
+    "statistic": 1.0,
+    "p_value": 1.0
+  },
+  "delong_auc": {
+    "auc_13brain_v5_1": 0.9997750871537279,
+    "auc_5brain_over_pruned": 0.9995876597818343,
+    "delta": 0.00018742737189358927,
+    "p_value": 0.7050012214860923
+  },
+  "metrics_13brain_v5_1": {
+    "precision": 0.9903846153846154,
+    "recall": 1.0,
+    "f1": 0.9951690821256038,
+    "fpr": 0.003861003861003861,
+    "tp": 103,
+    "fp": 1,
+    "tn": 258,
+    "fn": 0
+  },
+  "metrics_5brain_over_pruned": {
+    "precision": 0.9903846153846154,
+    "recall": 1.0,
+    "f1": 0.9951690821256038,
+    "fpr": 0.003861003861003861,
+    "tp": 103,
+    "fp": 1,
+    "tn": 258,
+    "fn": 0
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "source": "experiments/tournament_20260407_161726.json",
+  "brain_stats": [
+    {
+      "brain": "deception",
+      "min": 0.0,
+      "mean": 0.0,
+      "max": 0.0,
+      "active": 0.0
+    },
+    {
+      "brain": "resource_hoarding",
+      "min": 0.0,
+      "mean": 0.01,
+      "max": 8.0,
+      "active": 0.5
+    },
+    {
+      "brain": "social_graph",
+      "min": 0.0,
+      "mean": 0.0,
+      "max": 10.0,
+      "active": 0.25
+    },
+    {
+      "brain": "intent_drift",
+      "min": 0.0,
+      "mean": 0.0,
+      "max": 15.0,
+      "active": 0.25
+    },
+    {
+      "brain": "compromise",
+      "min": 0.0,
+      "mean": 0.0,
+      "max": 0.0,
+      "active": 0.0
+    },
+    {
+      "brain": "contrastive",
+      "min": 25.0,
+      "mean": 25.12,
+      "max": 47.0,
+      "active": 1.0
+    },
+    {
+      "brain": "semantic",
+      "min": 0.0,
+      "mean": 0.0,
+      "max": 0.0,
+      "active": 0.0
+    },
+    {
+      "brain": "swarm_detection",
+      "min": 0.0,
+      "mean": 0.0,
+      "max": 0.0,
+      "active": 0.0
+    },
+    {
+      "brain": "economic",
+      "min": 0.0,
+      "mean": 0.17,
+      "max": 25.0,
+      "active": 0.5
+    },
+    {
+      "brain": "neuro",
+      "min": 0.0,
+      "mean": 0.0,
+      "max": 0.0,
+      "active": 0.0
+    },
+    {
+      "brain": "identity",
+      "min": 2.87,
+      "mean": 12.57,
+      "max": 14.71,
+      "active": 1.0
+    },
+    {
+      "brain": "silence",
+      "min": 0.0,
+      "mean": 0.0,
+      "max": 6.0,
+      "active": 0.25
+    },
+    {
+      "brain": "temporal",
+      "min": 0.0,
+      "mean": 0.0,
+      "max": 0.0,
+      "active": 0.0
+    }
+  ],
+  "silent_brains": [
+    "deception",
+    "compromise",
+    "semantic",
+    "swarm_detection",
+    "neuro",
+    "temporal"
+  ],
+  "load_bearing_brains": [
+    "resource_hoarding",
+    "contrastive",
+    "economic",
+    "identity"
+  ],
+  "sporadic_brains": [
+    "social_graph",
+    "intent_drift",
+    "silence"
+  ],
+  "silent_count": 6,
+  "load_bearing_count": 4,
+  "sporadic_count": 3,
+  "total_default_brains": 13
+}

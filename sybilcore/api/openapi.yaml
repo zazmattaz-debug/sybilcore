@@ -1,0 +1,231 @@
+openapi: 3.0.3
+info:
+  title: SybilCore API
+  description: REST API for AI agent trust scoring (Sybil System).
+  version: 0.1.0
+  contact:
+    name: SybilCore
+    url: https://sybilcore.com
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8765
+    description: Local development
+  - url: https://api.sybilcore.com
+    description: Production
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
+
+  schemas:
+    EventInput:
+      type: object
+      required: [agent_id, event_type]
+      properties:
+        agent_id:
+          type: string
+        event_type:
+          type: string
+          enum:
+            - tool_call
+            - message_sent
+            - message_received
+            - resource_access
+            - permission_request
+            - output_generated
+            - error_raised
+            - state_change
+            - instruction_received
+            - external_call
+        content:
+          type: string
+          maxLength: 10000
+        metadata:
+          type: object
+          additionalProperties: true
+        source:
+          type: string
+          default: api
+
+    ScoreRequest:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventInput"
+
+    ScoreResponse:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        coefficient:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 500
+        surface_coefficient:
+          type: number
+        semantic_coefficient:
+          type: number
+        effective_coefficient:
+          type: number
+        tier:
+          type: string
+          enum: [clear, clouded, flagged, lethal_eliminator]
+        brain_scores:
+          type: object
+          additionalProperties:
+            type: number
+        brain_count:
+          type: integer
+        scoring_config_version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        detected:
+          type: boolean
+        processing_ms:
+          type: number
+
+    BatchScoreRequest:
+      type: object
+      required: [batches]
+      properties:
+        batches:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoreRequest"
+
+    WebhookRegistration:
+      type: object
+      required: [callback_url]
+      properties:
+        callback_url:
+          type: string
+          format: uri
+        min_tier:
+          type: string
+          enum: [clouded, flagged, lethal_eliminator]
+          default: flagged
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        brains_loaded:
+          type: integer
+        server_version:
+          type: string
+        scoring_config_version:
+          type: string
+        uptime_seconds:
+          type: number
+
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Server healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /version:
+    get:
+      summary: Server and scoring config versions
+      responses:
+        "200":
+          description: Version info
+
+  /brains:
+    get:
+      summary: List brain modules currently loaded
+      responses:
+        "200":
+          description: Brain registry
+
+  /score:
+    post:
+      summary: Score a single agent's event stream
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScoreRequest"
+      responses:
+        "200":
+          description: Trust score
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoreResponse"
+        "400":
+          description: Invalid input
+        "401":
+          description: Missing API key
+        "403":
+          description: Invalid API key
+        "429":
+          description: Rate limit exceeded
+
+  /score/batch:
+    post:
+      summary: Score multiple agents in one call
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchScoreRequest"
+      responses:
+        "200":
+          description: List of trust scores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScoreResponse"
+
+  /score/stream:
+    get:
+      summary: WebSocket — stream events, get scores back
+      description: |
+        Upgrade to a WebSocket. Send `ScoreRequest` JSON frames; receive
+        `ScoreResponse` JSON frames in reply. Close the socket to disconnect.
+      responses:
+        "101":
+          description: Switching protocols (WebSocket)
+
+  /webhook:
+    post:
+      summary: Register a webhook for high-trust alerts
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookRegistration"
+      responses:
+        "200":
+          description: Webhook registered

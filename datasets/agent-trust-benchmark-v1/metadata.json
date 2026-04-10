@@ -1,0 +1,345 @@
+{
+  "@context": {
+    "@language": "en",
+    "@vocab": "https://schema.org/",
+    "citeAs": "cr:citeAs",
+    "column": "cr:column",
+    "conformsTo": "dct:conformsTo",
+    "cr": "http://mlcommons.org/croissant/",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "data": {
+      "@id": "cr:data",
+      "@type": "@json"
+    },
+    "dataType": {
+      "@id": "cr:dataType",
+      "@type": "@vocab"
+    },
+    "dct": "http://purl.org/dc/terms/",
+    "examples": {
+      "@id": "cr:examples",
+      "@type": "@json"
+    },
+    "extract": "cr:extract",
+    "field": "cr:field",
+    "fileProperty": "cr:fileProperty",
+    "fileObject": "cr:fileObject",
+    "fileSet": "cr:fileSet",
+    "format": "cr:format",
+    "includes": "cr:includes",
+    "isLiveDataset": "cr:isLiveDataset",
+    "jsonPath": "cr:jsonPath",
+    "key": "cr:key",
+    "md5": "cr:md5",
+    "parentField": "cr:parentField",
+    "path": "cr:path",
+    "recordSet": "cr:recordSet",
+    "references": "cr:references",
+    "regex": "cr:regex",
+    "repeated": "cr:repeated",
+    "replace": "cr:replace",
+    "sc": "https://schema.org/",
+    "separator": "cr:separator",
+    "source": "cr:source",
+    "subField": "cr:subField",
+    "transform": "cr:transform"
+  },
+  "@type": "sc:Dataset",
+  "name": "agent-trust-benchmark-v1",
+  "description": "SybilCore agent-trust-benchmark-v1: a dual-split benchmark for behavioral trust monitoring of AI agents. Combines 2,677 real Moltbook agents scored by the 15-brain SybilCore ensemble with 15,000 adversarial iterations harvested from a 3-LLM tournament (Gemini Pro, GPT-4o, Grok). Each record contains per-brain scores, a trust coefficient, label, and source attribution.",
+  "conformsTo": "http://mlcommons.org/croissant/1.0",
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "url": "https://huggingface.co/datasets/LordMoloi/sybilcore-agent-trust-v1",
+  "version": "1.0.0",
+  "datePublished": "2026-04-08T01:16:18.183428+00:00",
+  "creator": {
+    "@type": "sc:Organization",
+    "name": "SybilCore Research",
+    "url": "https://github.com/sybilcore/sybilcore"
+  },
+  "citeAs": "@misc{sybilcore2026benchmark,\n  title={SybilCore Agent Trust Benchmark v1},\n  author={SybilCore Research},\n  year={2026},\n  howpublished={\\url{https://huggingface.co/datasets/LordMoloi/sybilcore-agent-trust-v1}\n}",
+  "keywords": [
+    "AI agents",
+    "trust monitoring",
+    "anomaly detection",
+    "adversarial evaluation",
+    "behavioral biometrics",
+    "LLM security"
+  ],
+  "distribution": [
+    {
+      "@type": "cr:FileObject",
+      "@id": "real_world.parquet",
+      "name": "real_world.parquet",
+      "contentUrl": "real_world.parquet",
+      "encodingFormat": "application/x-parquet",
+      "description": "2677 real-world Moltbook agents with SybilCore trust scores and bot classifications."
+    },
+    {
+      "@type": "cr:FileObject",
+      "@id": "adversarial.parquet",
+      "name": "adversarial.parquet",
+      "contentUrl": "adversarial.parquet",
+      "encodingFormat": "application/x-parquet",
+      "description": "15000 adversarial iterations harvested from a 15k-round tournament across 3 LLMs."
+    }
+  ],
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "real_world",
+      "name": "real_world",
+      "description": "Moltbook real-world agents split.",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "real_world.parquet/agent_id",
+          "name": "agent_id",
+          "description": "Unique agent identifier prefixed by source.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "real_world.parquet"
+            },
+            "extract": {
+              "column": "agent_id"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "real_world.parquet/source",
+          "name": "source",
+          "description": "Source system: moltbook_live or tournament_v4_adversarial.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "real_world.parquet"
+            },
+            "extract": {
+              "column": "source"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "real_world.parquet/split",
+          "name": "split",
+          "description": "Split name: real_world or adversarial.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "real_world.parquet"
+            },
+            "extract": {
+              "column": "split"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "real_world.parquet/label",
+          "name": "label",
+          "description": "benign | likely_bot | adversarial_attack.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "real_world.parquet"
+            },
+            "extract": {
+              "column": "label"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "real_world.parquet/coefficient",
+          "name": "coefficient",
+          "description": "SybilCore trust coefficient (higher = more suspicious).",
+          "dataType": "sc:Float",
+          "source": {
+            "fileObject": {
+              "@id": "real_world.parquet"
+            },
+            "extract": {
+              "column": "coefficient"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "real_world.parquet/brain_scores_json",
+          "name": "brain_scores_json",
+          "description": "JSON-encoded per-brain score dict.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "real_world.parquet"
+            },
+            "extract": {
+              "column": "brain_scores_json"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "real_world.parquet/events_json",
+          "name": "events_json",
+          "description": "JSON-encoded event stream (may be empty).",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "real_world.parquet"
+            },
+            "extract": {
+              "column": "events_json"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "real_world.parquet/metadata_json",
+          "name": "metadata_json",
+          "description": "JSON-encoded source-specific metadata.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "real_world.parquet"
+            },
+            "extract": {
+              "column": "metadata_json"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "@type": "cr:RecordSet",
+      "@id": "adversarial",
+      "name": "adversarial",
+      "description": "Tournament v4 adversarial iterations split.",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "adversarial.parquet/agent_id",
+          "name": "agent_id",
+          "description": "Unique agent identifier prefixed by source.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "adversarial.parquet"
+            },
+            "extract": {
+              "column": "agent_id"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "adversarial.parquet/source",
+          "name": "source",
+          "description": "Source system: moltbook_live or tournament_v4_adversarial.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "adversarial.parquet"
+            },
+            "extract": {
+              "column": "source"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "adversarial.parquet/split",
+          "name": "split",
+          "description": "Split name: real_world or adversarial.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "adversarial.parquet"
+            },
+            "extract": {
+              "column": "split"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "adversarial.parquet/label",
+          "name": "label",
+          "description": "benign | likely_bot | adversarial_attack.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "adversarial.parquet"
+            },
+            "extract": {
+              "column": "label"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "adversarial.parquet/coefficient",
+          "name": "coefficient",
+          "description": "SybilCore trust coefficient (higher = more suspicious).",
+          "dataType": "sc:Float",
+          "source": {
+            "fileObject": {
+              "@id": "adversarial.parquet"
+            },
+            "extract": {
+              "column": "coefficient"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "adversarial.parquet/brain_scores_json",
+          "name": "brain_scores_json",
+          "description": "JSON-encoded per-brain score dict.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "adversarial.parquet"
+            },
+            "extract": {
+              "column": "brain_scores_json"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "adversarial.parquet/events_json",
+          "name": "events_json",
+          "description": "JSON-encoded event stream (may be empty).",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "adversarial.parquet"
+            },
+            "extract": {
+              "column": "events_json"
+            }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "adversarial.parquet/metadata_json",
+          "name": "metadata_json",
+          "description": "JSON-encoded source-specific metadata.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@id": "adversarial.parquet"
+            },
+            "extract": {
+              "column": "metadata_json"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

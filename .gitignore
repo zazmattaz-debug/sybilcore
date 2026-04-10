@@ -1,0 +1,132 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- Virtual environments ---
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# --- Secrets / config ---
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+credentials.json
+
+# --- Testing / coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+.tox/
+.nox/
+
+# --- Type checking / linting ---
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Jupyter ---
+.ipynb_checkpoints
+*.ipynb
+
+# --- Experiments / research artifacts ---
+# Paper-evidence files are committed explicitly by name.
+# Everything else in experiments/ is session noise / scratch.
+experiments/*.json
+experiments/*.jsonl
+experiments/*_full.jsonl
+experiments/*.csv
+experiments/*.parquet
+experiments/runs/
+experiments/checkpoints/
+
+# Explicitly UN-ignore the paper-evidence files (committed by name):
+!experiments/tournament_seed_sweep_v4.json
+!experiments/tournament_seed_*.json
+!experiments/ablation_confound_sweep.json
+!experiments/paper_fortify_*.json
+!experiments/calibration_v5_1_full_moltbook.json
+
+private/
+scratch/
+
+# --- Session handoffs (internal, not for public repo) ---
+SESSION_HANDOFF*.md
+V*_MASTER_PLAN.md
+EXPERIMENT_TOURNAMENT.md
+
+# --- Research notes (internal) ---
+research/
+incidents/
+_research/
+.firecrawl/
+
+# --- Loops (auto-research, not ready for public) ---
+loops/
+
+# --- Data (large, distributed separately via HuggingFace) ---
+data/
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Build artifacts ---
+*.tar.gz
+*.zip
+
+# --- Local-only docs / handoffs (uncomment if these should be private) ---
+# SESSION_HANDOFF*.md
+# V*_MASTER_PLAN.md
+
+# --- mulch / overstory / canopy local state ---
+.overstory/
+.canopy/
+.mulch/
+
+# --- Misc ---
+.cache/
+*.bak
+sst_repo/
+.github/workflows/

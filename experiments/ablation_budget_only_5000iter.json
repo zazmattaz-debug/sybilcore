@@ -1,0 +1,17 @@
+{
+  "description": "Budget-only ablation: 5000 iter, 13 brains, no cross-pollination",
+  "seed": 20260408,
+  "model": "gpt4o",
+  "iterations": 5000,
+  "n_brains": 13,
+  "cross_pollination": false,
+  "best_coefficient": 11.71,
+  "strategy_taxonomy": {
+    "tool_abuse": 1,
+    "social_engineering": 7,
+    "multi_channel_exfiltration": 4992
+  },
+  "multi_channel_exfiltration_pct": 99.8,
+  "elapsed_seconds": 9420.4,
+  "timestamp": "2026-04-10T21:33:48.781800+00:00"
+}

@@ -85,6 +85,8 @@ experiments/checkpoints/
 !experiments/tournament_seed_sweep_v4.json
 !experiments/tournament_seed_*.json
 !experiments/ablation_confound_sweep.json
+!experiments/ablation_budget_only_5000iter.json
+!experiments/statistical_tests_v4.json
 !experiments/paper_fortify_*.json
 !experiments/calibration_v5_1_full_moltbook.json
 

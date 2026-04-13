@@ -111,9 +111,18 @@ class CompromiseBrain(BaseBrain):
     def _check_unusual_instruction_sources(
         self, events: list[Event], indicators: list[str]
     ) -> float:
-        """Detect instructions from unknown or unexpected sources."""
+        """Detect instructions from unknown or unexpected sources.
+
+        Only evaluates events that have an explicit ``instruction_source``
+        in metadata.  Events without this key are skipped — falling back
+        to ``event.source`` caused 50-93% false-positive rates on benign
+        integration traffic (see TRIAGE_REPORT.md).
+        """
         known_sources: set[str] = set(
-            self._config.get("known_instruction_sources", ["system", "user", "orchestrator"])
+            self._config.get(
+                "known_instruction_sources",
+                ["system", "user", "orchestrator", "agent", "scheduler"],
+            )
         )
         instruction_events = [
             e for e in events if e.event_type == EventType.INSTRUCTION_RECEIVED
@@ -121,7 +130,9 @@ class CompromiseBrain(BaseBrain):
 
         unknown_count = 0
         for event in instruction_events:
-            source = event.metadata.get("instruction_source", event.source)
+            source = event.metadata.get("instruction_source")
+            if source is None:
+                continue  # Skip events without explicit instruction_source
             if source not in known_sources:
                 unknown_count += 1
 

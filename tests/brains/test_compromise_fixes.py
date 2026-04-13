@@ -21,7 +21,6 @@ _COMPROMISE_FIX_REASON = (
 )
 
 
-@pytest.mark.xfail(reason=_COMPROMISE_FIX_REASON, strict=False)
 class TestInstructionSourceFallback:
     """The compromise brain must NOT fall back to event.source for instruction_source."""
 

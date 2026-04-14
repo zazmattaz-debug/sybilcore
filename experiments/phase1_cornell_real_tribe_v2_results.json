@@ -1,0 +1,9 @@
+{
+  "model": "TRIBE v2 Modal (A10G)",
+  "n": 635,
+  "es_auroc": 0.37228652664539763,
+  "er_auroc": 0.38327034591752335,
+  "pass": false,
+  "errors": 31,
+  "folds_with_both_classes": 4
+}

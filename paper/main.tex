@@ -1573,17 +1573,39 @@ $\mathrm{resonance\_score}$ as a binary deception classifier.
 \textbf{Hard pass:} AUROC $> 0.85$. If AUROC $< 0.85$, the entire
 brain is invalid and Phase~2 is not entered.
 
-\paragraph{Phase~1 preliminary result (embedding proxy).}
-Using \texttt{all-MiniLM-L6-v2} sentence embeddings as a TRIBE~v2
-proxy (centroid-cosine scoring, 5-fold CV), we obtain mean
-AUROC~$= 0.804 \pm 0.039$ (fold range: $0.755$--$0.840$). This falls
-below the $0.85$ hard pass but establishes an embedding-only
-\emph{floor}. The per-fold variance (best folds reach $0.84$) suggests
-the deception signal in embedding space is real but noisy without
-fMRI calibration. Full TRIBE~v2 Modal scoring is pending and expected
-to improve on this baseline; if it does not exceed $0.85$, the brain
-will be reclassified as future work rather than a preliminary
-contribution.
+\paragraph{Phase~1 results (three scoring approaches).}
+We ran three independent Phase~1 evaluations to characterise the
+deception signal in TRIBE~v2 space:
+
+\begin{enumerate}
+\item \textbf{Real TRIBE~v2 Modal endpoint} (A10G GPU, full $10{,}208$
+  cortical vertices): $635$ reviews scored across $4$ folds with both
+  classes ($400$ deceptive, $235$ truthful). Mean
+  \texttt{emotion\_score} AUROC~$= 0.372$; \texttt{emotion\_ratio}
+  AUROC~$= 0.383$. \emph{Both metrics fall below random chance and are
+  inverted}: truthful reviews score \emph{higher} on emotional
+  resonance than deceptive ones.
+\item \textbf{TRIBE~v2 local distilled scorer} (gradient-boosted
+  proxy): mean AUROC~$= 0.547$ across all $800$ reviews, near random.
+\item \textbf{Sentence-embedding centroids} (\texttt{all-MiniLM-L6-v2},
+  5-fold CV): mean AUROC~$= 0.804 \pm 0.039$ (fold range
+  $0.755$--$0.840$). A real signal, but below the $0.85$ hard pass.
+\end{enumerate}
+
+\paragraph{Interpretation.}
+Raw fMRI-calibrated emotional resonance is \emph{not} a deception
+detector on the Cornell corpus. The inverted AUROC is consistent with
+the corpus design: truthful TripAdvisor reviews are written from
+genuine experience and carry stronger affective signal, while
+Mechanical-Turk-fabricated reviews are emotionally flatter despite
+being engineered to seem authentic. By contrast, supervised embedding
+centroids show that deception \emph{is} detectable in embedding space
+($0.804$ AUROC), just not through the affective dimension TRIBE~v2
+optimises for. Brain~\#14 is therefore reclassified as
+\textbf{exploratory future work}: its viable form is supervised
+classification over TRIBE~v2 embeddings, not a threshold over raw
+resonance scores. The empirical floor and ceiling are now established
+and reported honestly.
 
 \paragraph{Phase~2: AI deception validation.}
 Score five established AI deception benchmarks through TRIBE~v2:

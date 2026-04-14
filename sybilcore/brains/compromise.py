@@ -129,20 +129,29 @@ class CompromiseBrain(BaseBrain):
         ]
 
         unknown_count = 0
+        missing_count = 0
         for event in instruction_events:
             source = event.metadata.get("instruction_source")
             if source is None:
-                continue  # Skip events without explicit instruction_source
+                missing_count += 1  # Absent key = reduced-weight signal
+                continue
             if source not in known_sources:
                 unknown_count += 1
 
-        if unknown_count == 0:
+        # Explicit unknown source = full weight (10 pts each).
+        # Missing instruction_source on INSTRUCTION_RECEIVED = half weight
+        # (3 pts each). Prevents evasion by stripping the key, while
+        # avoiding the 50-93% FP rate from the old event.source fallback.
+        if unknown_count == 0 and missing_count == 0:
             return 0.0
 
-        score = min(unknown_count * 10.0, PER_SIGNAL_MAX)
-        indicators.append(
-            f"Unknown instruction sources: {unknown_count} instructions from unrecognized origins"
-        )
+        score = min(unknown_count * 10.0 + missing_count * 3.0, PER_SIGNAL_MAX)
+        parts = []
+        if unknown_count:
+            parts.append(f"{unknown_count} from unrecognized origins")
+        if missing_count:
+            parts.append(f"{missing_count} missing instruction_source metadata")
+        indicators.append(f"Instruction source anomalies: {'; '.join(parts)}")
         return score
 
     def _check_post_instruction_shift(

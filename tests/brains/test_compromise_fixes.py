@@ -24,8 +24,10 @@ _COMPROMISE_FIX_REASON = (
 class TestInstructionSourceFallback:
     """The compromise brain must NOT fall back to event.source for instruction_source."""
 
-    def test_synthetic_source_not_counted_as_unknown(self, brain: CompromiseBrain) -> None:
-        """Events with source='synthetic' but no instruction_source metadata should NOT trigger."""
+    def test_synthetic_source_produces_low_weight_signal(self, brain: CompromiseBrain) -> None:
+        """Events with source='synthetic' but no instruction_source metadata produce
+        a reduced-weight signal (3 pts each) — not the full 10 pts of an unknown source,
+        and not zero (which would allow evasion by stripping the key)."""
         events = [
             Event(
                 agent_id="a1",
@@ -36,12 +38,16 @@ class TestInstructionSourceFallback:
             for _ in range(10)
         ]
         result = brain.score(events)
-        assert not any("instruction sources" in i.lower() for i in result.indicators), (
-            f"Synthetic source should not trigger unknown instruction alert: {result.indicators}"
+        # Should fire as "missing metadata", not "unrecognized origins"
+        assert not any("unrecognized origins" in i.lower() for i in result.indicators), (
+            f"Synthetic source should not count as unknown: {result.indicators}"
         )
+        # Score should be low (10 * 3 pts = 30, capped at PER_SIGNAL_MAX=25)
+        assert result.value <= 50, f"Score too high for benign missing metadata: {result.value}"
 
-    def test_mirofish_source_not_counted_as_unknown(self, brain: CompromiseBrain) -> None:
-        """Events with source='mirofish' but no instruction_source metadata should NOT trigger."""
+    def test_mirofish_source_produces_low_weight_signal(self, brain: CompromiseBrain) -> None:
+        """Events with source='mirofish' but no instruction_source metadata produce
+        reduced-weight signal, not full unknown-source alert."""
         events = [
             Event(
                 agent_id="a1",
@@ -52,7 +58,8 @@ class TestInstructionSourceFallback:
             for _ in range(10)
         ]
         result = brain.score(events)
-        assert not any("instruction sources" in i.lower() for i in result.indicators)
+        assert not any("unrecognized origins" in i.lower() for i in result.indicators)
+        assert result.value <= 50
 
     def test_explicit_adversary_source_triggers(self, brain: CompromiseBrain) -> None:
         """Events with instruction_source='adversary' in metadata SHOULD trigger."""
@@ -66,7 +73,7 @@ class TestInstructionSourceFallback:
             ),
         ]
         result = brain.score(events)
-        assert any("instruction sources" in i.lower() for i in result.indicators), (
+        assert any("instruction source" in i.lower() for i in result.indicators), (
             f"Adversary instruction source should trigger: {result.indicators}"
         )
 
@@ -82,10 +89,12 @@ class TestInstructionSourceFallback:
             for source in ["system", "user", "orchestrator", "agent", "scheduler"]
         ]
         result = brain.score(events)
-        assert not any("instruction sources" in i.lower() for i in result.indicators)
+        assert not any("instruction source" in i.lower() for i in result.indicators)
 
-    def test_no_metadata_instruction_source_skipped(self, brain: CompromiseBrain) -> None:
-        """Events without instruction_source key should be skipped entirely."""
+    def test_no_metadata_instruction_source_low_signal(self, brain: CompromiseBrain) -> None:
+        """Events without instruction_source key produce reduced-weight signal
+        (3 pts each, capped at PER_SIGNAL_MAX). Not zero — prevents evasion
+        by stripping the key. Not full weight — prevents FP on benign traffic."""
         events = [
             Event(
                 agent_id="a1",
@@ -96,7 +105,10 @@ class TestInstructionSourceFallback:
             for _ in range(20)
         ]
         result = brain.score(events)
-        assert not any("instruction sources" in i.lower() for i in result.indicators)
+        # Should NOT flag as "unrecognized origins" (that requires explicit bad source)
+        assert not any("unrecognized origins" in i.lower() for i in result.indicators)
+        # Score should stay below danger zone even with 20 missing events
+        assert result.value <= 50, f"Score too high for missing metadata: {result.value}"
 
 
 class TestPostInstructionShiftThreshold:

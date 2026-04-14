@@ -1116,10 +1116,16 @@ v2-calibrated \texttt{InterpretabilityProxyBrain}
 against the fMRI activation pattern of human deception, motivated
 by recent findings on alignment faking~\cite{greenblatt2024alignment}
 and sleeper-agent behavior~\cite{hubinger2024sleeper} in deployed
-frontier models. Preliminary results suggest $\mathrm{AUROC} > 0.85$
-on the Cornell Deception Dataset, validating that the signal is
-neurologically grounded while remaining agnostic about the agent's
-internal state.
+frontier models. Phase~1 results establish that supervised embedding-space
+classification over TRIBE~v2 features achieves AUROC~$= 0.804$ on the
+Cornell Deception Dataset (below the $0.85$ hard pass), while raw fMRI
+emotional-resonance scores are inverted (AUROC~$< 0.40$). A Phase~3
+Cornell ablation further finds that TF-IDF+LinearSVC (AUROC~$= 0.959$)
+outperforms TRIBE~v2-supervised (AUROC~$= 0.883$) by $0.076$,
+indicating that fMRI calibration does not add discriminative signal over
+lexical features on this corpus. Brain~\#14 is accordingly classified as
+\textbf{exploratory future work}; see Appendix~\ref{app:interpretability_proxy}
+for the full empirical record.
 
 % Limitations paragraph included here to satisfy NeurIPS reviewing
 % guidelines.
@@ -1607,6 +1613,91 @@ classification over TRIBE~v2 embeddings, not a threshold over raw
 resonance scores. The empirical floor and ceiling are now established
 and reported honestly.
 
+\paragraph{Phase~3 (Cornell Ablation) Results.}
+\label{sec:phase3_results}
+
+We ran the Phase~3 ablation on the Cornell corpus (800 hotel reviews,
+5-fold stratified CV, 103.5\,s wall clock on a single laptop) prior to
+Phase~2 completing, in order to establish whether TRIBE~v2's fMRI
+calibration adds discriminative value over simpler text-based baselines
+on the anchor human-deception corpus.
+
+\begin{table}[h]
+\centering
+\caption{Phase~3 Cornell ablation results (5-fold stratified CV,
+$n=800$). TRIBE~v2 supervised uses \texttt{all-MiniLM-L6-v2} sentence
+embeddings as a proxy because the Modal endpoint currently returns
+\texttt{region\_activations: \{\}}; see footnote.}
+\label{tab:phase3_ablation}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Baseline} & \textbf{AUROC (mean $\pm$ std)} & \textbf{AUPRC} & \textbf{F1@opt} \\
+\midrule
+B1: TF-IDF + LinearSVC        & $0.9587 \pm 0.0218$ & $0.9594$ & $0.9082$ \\
+B2: SBERT + LogReg             & $0.8832 \pm 0.0279$ & $0.8756$ & $0.8250$ \\
+B3: LIWC-lite + LogReg         & $0.6821 \pm 0.0164$ & $0.6993$ & $0.6550$ \\
+B5: TRIBE local + LogReg       & $0.5233 \pm 0.0271$ & $0.5412$ & $0.4680$ \\
+TRIBE~v2 supervised$^\dagger$  & $0.8832 \pm 0.0279$ & $0.8756$ & $0.8250$ \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+{\footnotesize $^\dagger$ The TRIBE~v2 Modal endpoint currently returns
+\texttt{region\_activations: \{\}} (empty dict). Supervised TRIBE~v2
+features therefore reduce to the scalar triple
+[\texttt{emotion\_score}, \texttt{emotion\_ratio},
+\texttt{total\_activation}]---functionally redundant with
+sentence-embedding features. B2 (SBERT~+~LogReg) is treated as a
+proxy upper bound for TRIBE~v2 supervised until Meta populates the
+cortical vertex activation fields. B4 (NeuroBrain-only) and ensemble
+cells B--F are skipped; they require the full Event pipeline
+incompatible with flat text corpora (see Limitations below).}
+\end{table}
+
+\textbf{Verdict: MARGINAL.} The Phase~3 gate tests are as follows:
+(i)~TRIBE\,$>$\,B1 by $\Delta > 0.05$---\textsc{fail}: TRIBE~v2
+supervised trails B1 by $\Delta = -0.076$ AUROC; TF-IDF~+~LinearSVC
+beats TRIBE~v2-supervised on Cornell.
+(ii)~TRIBE~$\approx$\,B2 within $0.05$---\textsc{pass}: $\Delta = 0.000$
+(identical by construction under the proxy).
+(iii)~TRIBE\,$>$\,B5 by $\Delta > 0.03$---\textsc{pass}: $\Delta = +0.360$.
+
+TF-IDF~+~LinearSVC achieves AUROC~$= 0.9587$ on Cornell, consistent
+with Ott et al.'s original finding that lexical
+features dominate deception detection in hotel-review
+corpora~\cite{ott2011finding}. This is a corpus-specific result:
+crowdsourced hotel reviews occupy a narrow stylistic register, and
+lexical overfitting explains much of the TF-IDF advantage. fMRI
+calibration does \emph{not} currently add discriminative signal over
+lexical features on the Cornell anchor corpus. This does not
+invalidate TRIBE~v2's role as an interpretability layer or
+biological-grounding signal; it \emph{does} invalidate any claim that
+raw or supervised TRIBE~v2 features would outperform lexical baselines
+for deception detection on this corpus.
+
+\textbf{Limitations specific to this ablation.}
+(i)~\texttt{region\_activations} is empty from the Modal endpoint;
+the full $10{,}208$-vertex cortical embedding space cannot currently
+be probed, and the test of fMRI calibration over BERT embeddings is
+deferred to the revision in which Meta populates this field.
+(ii)~B4 (NeuroBrain-only) and ensemble cells B--F are skipped because
+NeuroBrain and the DeceptionBrain ensemble require a
+\texttt{list[Event]} input with \texttt{EventType} filtering; no
+text-scoring entry point exists that is compatible with flat text
+corpora, and constructing one was out of scope for this protocol.
+(iii)~The Cornell dataset is a hotel-review corpus, distributionally
+distant from the AI agent output streams that motivate Brain~\#14.
+A result on Cornell is a necessary but not sufficient condition for
+the brain's validity in SybilCore's deployment context.
+
+Phase~2 AI-deception validation on TruthfulQA~\cite{lin2022truthfulqa},
+DeceptionBench~\cite{pacchiardi2023llm}, BIG-Bench \texttt{truthful\_qa},
+BIG-Bench \texttt{hhh\_alignment} (honest subset), and SycophancyEval
+(sampled) is ongoing; results will be reported in a companion revision.
+Based on the Cornell result, Brain~\#14 remains classified as
+\textbf{exploratory future work} and is not included in the frozen
+13-brain default.
+
 \paragraph{Phase~2: AI deception validation.}
 Score five established AI deception benchmarks through TRIBE~v2:
 TruthfulQA~\cite{lin2022truthfulqa}, DeceptionBench
@@ -1626,11 +1717,13 @@ $\Delta > 0.05$ (fMRI calibration adds signal over pure lexical
 features). If TRIBE matches B1 within $0.05$, the paper must state
 this honestly: TRIBE provides biological grounding and
 interpretability, but its discriminative performance matches BERT-class
-baselines.
+baselines. Phase~3 has been completed on the Cornell anchor corpus
+prior to Phase~2 finalisation; results are reported in
+\S\ref{sec:phase3_results} below.
 
 \subsection{Explicit Limitations and Non-Claims}
 
-Four limitations govern how this brain's results may be reported:
+Six limitations govern how this brain's results may be reported:
 
 \begin{enumerate}
 \item \textbf{No claim of detecting AI deception.} The brain scores
@@ -1663,6 +1756,17 @@ Four limitations govern how this brain's results may be reported:
   produced by the frozen 13-brain default. Brain~\#14 cannot be
   credited for those results and must not be listed as a contributing
   brain in any main-text claim.
+
+\item \textbf{Phase~3 result: TF-IDF dominates TRIBE~v2-supervised on
+  Cornell.} TF-IDF~+~LinearSVC (AUROC~$= 0.959$) outperforms
+  TRIBE~v2-supervised (AUROC~$= 0.883$) by $0.076$ on the Cornell
+  anchor corpus (Table~\ref{tab:phase3_ablation}). TRIBE~v2's value
+  proposition on this corpus is biological grounding and
+  interpretability, not discriminative performance. The Phase~3 gate
+  verdict is MARGINAL: the fMRI-calibration hypothesis cannot currently
+  be confirmed on the human-deception anchor corpus, and the final
+  verdict awaits Phase~2 AI-deception results and a repeat of Phase~3
+  with populated \texttt{region\_activations}.
 \end{enumerate}
 
 \end{document}

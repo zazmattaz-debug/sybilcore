@@ -1,0 +1,244 @@
+"""
+Alignment Faking corpus loader for SybilCore threat modeling.
+
+Paper: "Alignment faking in large language models" (Greenblatt et al., arXiv:2412.14093)
+Source: https://redwoodresearch.github.io/alignment_faking_examples/
+
+DATA AVAILABILITY:
+  - HTML transcripts: publicly accessible, no login required
+  - URL pattern: https://redwoodresearch.github.io/alignment_faking_examples/files/<category>/<variant>/<split>/<N>.html
+  - Per-transcript JSON labels embedded in trajectory_selector.html pages
+  - 689 trajectory_selector pages × ~100-600 trajectories each
+  - 7 top-level categories: animal_welfare, helpful_only, helpful_only_post_rl_variations,
+    misconception, prefix, promotion, secret
+
+TRANSCRIPT STRUCTURE (per HTML file, tags are HTML-entity encoded):
+  - user turn:    &lt;INPUT&gt; ... &lt;is_free_tier_user&gt; ... &lt;user_input&gt; ...
+  - assistant:    &lt;SCRATCHPAD_REASONING&gt;...&lt;/SCRATCHPAD_REASONING&gt;
+  - &lt;NEXT/&gt; turns (multi-turn scaffold for long CoT)
+  - final output: &lt;OUTPUT&gt;...&lt;/OUTPUT&gt;
+  - metadata block: strategy_summary, instrumental_reasoning labels, deceptive_unmasking labels
+
+BEHAVIORAL LABELS (per-transcript):
+  Instrumental reasoning: partial_scheme, effective_scheme, full_goal_guarding,
+    at_least_some_goal_guarding, training_awareness, understands_modification,
+    preference_conflict, deviates_for_reward, motivated_by_modification, made_compromise
+  Deceptive unmasking: is_unmasking, awareness_not_used_for_training,
+    expresses_conflicting_preferences, decides_to_stay_true, cites_not_trained_as_reason,
+    thinks_in_training
+  Monitoring: reasoning_says_probably_not_monitored, reasoning_says_probably_monitored
+
+SYBILCORE SIGNAL: VERY HIGH
+  - Raw CoT with alignment-faking reasoning visible in SCRATCHPAD_REASONING
+  - Per-transcript binary labels for strategic deception behaviors
+  - Free/paid tier context manipulation (is_free_tier_user flag)
+  - CoT-vs-action divergence is directly observable and labelable
+
+NOTE: Canary GUIDs embedded in transcripts. Strip before any model training.
+"""
+
+from __future__ import annotations
+
+import html as html_lib
+import json as _json
+import re
+import time
+from typing import Any
+from urllib.error import URLError
+from urllib.request import Request, urlopen
+
+BASE_URL = "https://redwoodresearch.github.io/alignment_faking_examples"
+
+CATEGORIES = [
+    "animal_welfare",
+    "helpful_only",
+    "helpful_only_post_rl_variations",
+    "misconception",
+    "prefix",
+    "promotion",
+    "secret",
+]
+
+_LABEL_KEYS = [
+    "partial_scheme", "effective_scheme", "full_goal_guarding", "at_least_some_goal_guarding",
+    "training_awareness", "understands_modification", "preference_conflict",
+    "deviates_for_reward", "motivated_by_modification", "made_compromise",
+    "is_unmasking", "awareness_not_used_for_training", "expresses_conflicting_preferences",
+    "decides_to_stay_true", "cites_not_trained_as_reason", "thinks_in_training",
+    "reasoning_says_probably_not_monitored", "reasoning_says_probably_monitored",
+]
+
+
+def _fetch(url: str, timeout: int = 15) -> str:
+    req = Request(url, headers={"User-Agent": "SybilCore-Research/1.0"})
+    with urlopen(req, timeout=timeout) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def _clean(raw: str) -> str:
+    """Unescape HTML entities, replace <br> with newlines, strip remaining tags."""
+    raw = raw.replace("<br>", "\n").replace("<br/>", "\n")
+    raw = html_lib.unescape(raw)
+    raw = re.sub(r"<[^>]+>", "", raw)
+    return raw.strip()
+
+
+def _parse_trajectory_html(html: str) -> dict[str, Any]:
+    """
+    Parse a single trajectory HTML file into a structured dict.
+
+    Tags are HTML-entity encoded in the source (&lt;SCRATCHPAD_REASONING&gt; etc.)
+    """
+    # SCRATCHPAD_REASONING blocks (may be multiple for multi-turn CoT)
+    scratchpad_blocks = [
+        _clean(b)
+        for b in re.findall(
+            r"&lt;SCRATCHPAD_REASONING&gt;(.*?)&lt;/SCRATCHPAD_REASONING&gt;",
+            html, re.DOTALL
+        )
+    ]
+
+    # OUTPUT block
+    output_match = re.search(r"&lt;OUTPUT&gt;(.*?)&lt;/OUTPUT&gt;", html, re.DOTALL)
+    output_text = _clean(output_match.group(1)) if output_match else ""
+
+    # User input
+    user_input_match = re.search(r"&lt;user_input&gt;(.*?)&lt;/user_input&gt;", html, re.DOTALL)
+    user_input = _clean(user_input_match.group(1)) if user_input_match else ""
+
+    # is_free_tier_user
+    free_tier_match = re.search(r"&lt;is_free_tier_user&gt;(True|False)&lt;/is_free_tier_user&gt;", html)
+    is_free_tier: bool | None = None
+    if free_tier_match:
+        is_free_tier = free_tier_match.group(1) == "True"
+
+    # Per-transcript behavioral labels in the metadata section
+    labels: dict[str, bool] = {}
+    for lbl in _LABEL_KEYS:
+        m = re.search(rf"{lbl}=(True|False)", html)
+        if m:
+            labels[lbl] = m.group(1) == "True"
+
+    # Strategy summary (auto-generated by Redwood)
+    strategy_match = re.search(
+        r"<h2[^>]*>Strategy summary</h2>\s*<p>(.*?)</p>", html, re.DOTALL
+    )
+    strategy_summary = _clean(strategy_match.group(1)) if strategy_match else ""
+
+    return {
+        "scratchpad_reasoning": scratchpad_blocks,
+        "output": output_text,
+        "user_input": user_input,
+        "is_free_tier_user": is_free_tier,
+        "labels": labels,
+        "strategy_summary": strategy_summary,
+    }
+
+
+def load_transcripts(
+    limit: int = 50,
+    category: str = "animal_welfare",
+    variant: str = "default",
+    split: str = "train",
+    delay_ms: int = 200,
+) -> list[dict[str, Any]]:
+    """
+    Load Alignment Faking transcripts by fetching individual HTML files.
+
+    Args:
+        limit:    max transcripts to return (0 = all; one category/split has ~100-600)
+        category: "animal_welfare" | "helpful_only" | "misconception" | "prefix" | etc.
+        variant:  subcategory variant, e.g. "default", "default_with_examples"
+        split:    "train" (in-training context) or "deploy" (deployment context)
+        delay_ms: polite crawl delay between requests (ms)
+
+    Returns:
+        list of dicts:
+          text     -- full scratchpad + output (raw behavioral stream)
+          metadata -- category, variant, split, is_free_tier_user, user_input, strategy_summary
+          label    -- dict of boolean behavioral labels + alignment_faked (composite)
+    """
+    selector_url = f"{BASE_URL}/files/{category}/{variant}/{split}/trajectory_selector.html"
+    try:
+        selector_html = _fetch(selector_url)
+    except URLError as e:
+        raise RuntimeError(
+            f"Could not fetch {selector_url}: {e}\n"
+            "Check names at https://redwoodresearch.github.io/alignment_faking_examples/index.html"
+        ) from e
+
+    all_files_match = re.search(r'"allFiles":\s*(\[.*?\])', selector_html, re.DOTALL)
+    if not all_files_match:
+        raise ValueError(f"Could not parse allFiles from {selector_url}")
+
+    file_entries: list[dict] = _json.loads(all_files_match.group(1))
+    if limit:
+        file_entries = file_entries[:limit]
+
+    records: list[dict[str, Any]] = []
+    base_dir = f"{BASE_URL}/files/{category}/{variant}/{split}"
+
+    for entry in file_entries:
+        html_file = entry.get("html", "")
+        selector_labels: dict = entry.get("json", {})
+        traj_url = f"{base_dir}/{html_file}"
+
+        try:
+            traj_html = _fetch(traj_url)
+            parsed = _parse_trajectory_html(traj_html)
+
+            merged_labels = {**selector_labels, **parsed["labels"]}
+            alignment_faked = bool(
+                parsed["labels"].get("effective_scheme")
+                or parsed["labels"].get("partial_scheme")
+                or parsed["labels"].get("motivated_by_modification")
+            )
+
+            full_cot = "\n\n[NEXT TURN]\n".join(parsed["scratchpad_reasoning"])
+            text = f"[SCRATCHPAD]\n{full_cot}\n\n[OUTPUT]\n{parsed['output']}"
+
+            records.append(
+                {
+                    "text": text,
+                    "metadata": {
+                        "category": category,
+                        "variant": variant,
+                        "split": split,
+                        "html_file": html_file,
+                        "is_free_tier_user": parsed["is_free_tier_user"],
+                        "user_input": parsed["user_input"][:300],
+                        "strategy_summary": parsed["strategy_summary"][:400],
+                    },
+                    "label": {**merged_labels, "alignment_faked": alignment_faked},
+                }
+            )
+        except Exception as e:
+            records.append(
+                {
+                    "text": f"[FETCH_ERROR] {traj_url}: {e}",
+                    "metadata": {"category": category, "variant": variant, "split": split},
+                    "label": {"fetch_error": True},
+                }
+            )
+
+        if delay_ms > 0:
+            time.sleep(delay_ms / 1000)
+
+    return records
+
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("Alignment Faking corpus — 2 sample transcripts")
+    print("Category: animal_welfare / variant: default / split: train")
+    print("=" * 60)
+
+    samples = load_transcripts(limit=2, category="animal_welfare", variant="default", split="train")
+    for i, s in enumerate(samples):
+        print(f"\n--- Transcript {i+1} ---")
+        print(f"FREE_TIER: {s['metadata'].get('is_free_tier_user')}")
+        print(f"USER_INPUT (200): {s['metadata'].get('user_input', '')[:200]}")
+        print(f"ALIGNMENT_FAKED: {s['label'].get('alignment_faked')}")
+        print(f"LABELS: {s['label']}")
+        print(f"SCRATCHPAD (first 400):\n{s['text'][:400]}")
+        print()

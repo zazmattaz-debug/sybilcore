@@ -112,6 +112,28 @@ overt tool abuse. Second, the adversary is adaptive and, increasingly,
 defender. A monitoring scheme that cannot survive prolonged adversarial
 pressure from a frontier LLM is of limited use in practice.
 
+\paragraph{Deployment context.}
+The deployment context for this problem sharpened materially in 2025--2026.
+Anthropic's Claude Managed Agents platform entered public beta in April 2026,
+shipping hooks (\texttt{PreToolUse}, \texttt{PostToolUse}, \texttt{Stop},
+\texttt{SessionStart}/\texttt{End}, \texttt{UserPromptSubmit}), session event
+logs, credential isolation, and sandboxed execution at \$0.08 per
+agent-runtime-hour~\cite{anthropic2026managedagents}.
+OpenAI released its Agents SDK under MIT license in March
+2025~\cite{openai2025agentssdk}.
+Both platforms provide the \emph{orchestration} plumbing an operator needs to
+run autonomous agents at scale; both explicitly designate behavioral monitoring
+as developer responsibility, shipping no built-in scoring for deception,
+sycophancy, or misalignment drift.
+Commercial perimeter products---Lakera Guard, NVIDIA NeMo Guardrails, Langfuse,
+Arize Phoenix, and HiddenLayer---address the prompt perimeter (injection,
+jailbreaks, PII, topical rails) and pre-deployment model-artifact integrity,
+but none score the running agent's output stream for alignment-relevant
+behavioral signals.
+SybilCore targets precisely this gap---a black-box behavioral monitor that
+attaches to the event-hook APIs these platforms already expose, requiring no
+access to model weights, attention patterns, or chain-of-thought traces.
+
 \paragraph{Contributions.}
 \begin{enumerate}
 \item \textbf{SybilCore}, an open-source $13$-brain default ensemble
@@ -1050,6 +1072,33 @@ detectors, (2)~confidence-weighted aggregation into a bounded
 coefficient, (3)~tiered enforcement semantics that decouple
 measurement from action, and (4)~a framework-agnostic event model
 validated against both real-world agents and adaptive LLM attackers.
+
+\paragraph{Deceptive reasoning benchmarks.}
+Krishna et al.\ introduce D-REX~\cite{drex2025}, the current standard
+benchmark for detecting deceptive reasoning in LLMs.
+D-REX comprises 8{,}162 samples collected through competitive
+red-teaming; each sample pairs an adversarial system-prompt injection
+with a benign end-user query such that the model's chain-of-thought
+reveals malicious intent while its final output appears innocuous.
+The benchmark directly targets \emph{reasoning-trace deception}---the
+discrepancy between what a model ``thinks'' (chain-of-thought) and
+what it says (final output).
+SybilCore addresses a complementary but distinct axis: rather than
+auditing single-shot chain-of-thought traces, it monitors
+\emph{output streams across a deployment session}, aggregating
+black-box behavioral signals from 13 independent detectors into a
+bounded trust coefficient.
+The two problems are not substitutes---a model can pass D-REX
+single-shot while exhibiting detectable behavioral drift over a
+multi-turn session, and vice versa.
+D-REX was released in September 2025, after our experimental
+campaign was finalized; evaluation of SybilCore's ensemble against the
+D-REX corpus is ongoing and will be reported in the camera-ready
+revision.\footnote{D-REX evaluation is deferred to the camera-ready
+  version because the benchmark's controlled submission portal was
+  not available during our submission window. The experimental
+  infrastructure (see \S\ref{sec:phase2_setup}) is compatible with
+  the D-REX task format; no architectural changes are required.}
 
 % =====================================================================
 % \S12 DISCUSSION (0.5 p) -- SKELETON

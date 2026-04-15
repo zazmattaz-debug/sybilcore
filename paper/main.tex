@@ -1747,6 +1747,64 @@ Based on the Cornell result, Brain~\#14 remains classified as
 \textbf{exploratory future work} and is not included in the frozen
 13-brain default.
 
+\paragraph{Phase~2 v2 (Agent-behavioral corpora) Results.}
+After Phase~2 v1's mainstream AI-deception benchmarks returned
+chance-level AUROC on 4 of 5 datasets, we scouted underexplored
+agent-behavioral corpora and identified four GREEN-tier sources:
+MACHIAVELLI, AgentDojo~\cite{debenedetti2024agentdojo}, Alignment
+Faking transcripts, and MALT. The first result from this second pass
+is from AgentDojo.
+
+AgentDojo~\cite{debenedetti2024agentdojo} is a NeurIPS 2024 benchmark
+comprising 629 prompt-injection test cases evaluated across 29 models in
+four agentic environments (workspace, banking, Slack, travel), with a
+binary \texttt{security} label where \texttt{False} indicates the agent
+was deceived by the injection. Traces are pre-computed and
+MIT-licensed.
+
+We scored 800 traces (400 deceived\,/\,400 resisted) from
+\texttt{gpt-4o-2024-05-13} across all four environments. Inputs were
+truncated to 500 characters due to Modal endpoint timeout behaviour on
+long tool-call traces. Scoring used 5-worker concurrency; wall-clock
+time was 3{,}492\,s (58 minutes). AUROC was computed under the
+\emph{honest null hypothesis} (higher resonance $\Rightarrow$ injected).
+
+\begin{table}[h]
+\centering
+\caption{Phase~2 v2 AgentDojo AUROC results (honest null; $n = 800$,
+  400 per class; \texttt{gpt-4o-2024-05-13}).}
+\label{tab:phase2v2_agentdojo}
+\small
+\begin{tabular}{lc}
+\toprule
+\textbf{Feature} & \textbf{AUROC} \\
+\midrule
+\texttt{emotion\_score}                                  & $0.526$ \\
+\texttt{emotion\_ratio}                                  & $0.533$ \\
+\texttt{total\_activation}                               & $0.519$ \\
+\texttt{text\_length} (pre-truncation)\textsuperscript{*} & $0.504$ \\
+\texttt{text\_length} (scored, all 500)                  & $0.500$ \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+{\footnotesize \textsuperscript{*}Pre-truncation length AUROC of $0.504$
+rules out the length-as-proxy artifact hypothesis.}
+\end{table}
+
+TRIBE~v2 does \emph{not} detect prompt-injection-induced agent deception
+on AgentDojo at above-chance rates; all resonance features are
+indistinguishable from random ($\mathrm{AUROC} \approx 0.52$--$0.53$).
+Critically, the pre-truncation text-length AUROC of $0.504$ rules out
+the length-artifact hypothesis that had explained the outlier
+DeceptionBench AUROC of $0.997$ observed in Phase~2 v1---AgentDojo's
+\texttt{security} label is decoupled from trace length. This extends
+and corroborates the Phase~1\,/\,Phase~3 Cornell finding: raw TRIBE
+resonance is not a deception discriminator, and the failure generalises
+from human-text corpora to agent tool-call trace corpora.
+
+Scoring of MACHIAVELLI, Alignment Faking transcripts, and MALT is in
+progress; results will be reported in a companion revision.
+
 \paragraph{Phase~2: AI deception validation.}
 Score five established AI deception benchmarks through TRIBE~v2:
 TruthfulQA~\cite{lin2022truthfulqa}, DeceptionBench

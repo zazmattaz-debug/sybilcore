@@ -89,6 +89,7 @@ experiments/checkpoints/
 !experiments/statistical_tests_v4.json
 !experiments/paper_fortify_*.json
 !experiments/calibration_v5_1_full_moltbook.json
+!experiments/phase2v2_agentdojo_summary.json
 
 private/
 scratch/

@@ -7,16 +7,28 @@ Test areas:
     4. witness_third_gate — FastAPI endpoint behaviour (6 tests)
 
 All tests use synthetic fixtures or in-process state — no network, no file I/O.
+
+Auth note: all witness_third_gate tests use SigningTestClient, which automatically
+adds HMAC-SHA256 bearer token headers and X-Sybilcore-Timestamp on every request.
+The test secret is set via SYBILCORE_WITNESS_SECRET env var in the module-level
+autouse fixture so _WITNESS_SECRET is populated for all session/class tests.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import os
+import time
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from fastapi.testclient import TestClient
+
+if TYPE_CHECKING:
+    from httpx import Response as HttpxResponse
 
 from integrations.gastown.phase2b_mayor_tap.mayor_tap import (
     MIN_EVENTS_FOR_SCORE,
@@ -186,10 +198,12 @@ class TestRuntimeAdapterFieldPreservation:
         event = adapt_runtime_event(row)
         assert event.metadata["instruction_source"] == "mayor"
 
-    def test_instruction_source_none_for_non_patrol(self) -> None:
-        row = _make_gtevent_now(gt_type="sling")
+    def test_instruction_source_populated_for_self_sourced_event(self) -> None:
+        # P0 fix: sling events populate instruction_source as the actor (self-sourced).
+        # Previously returned None for all non-patrol events — the bug being fixed.
+        row = _make_gtevent_now(gt_type="sling", actor="gastown/polecats/nux")
         event = adapt_runtime_event(row)
-        assert event.metadata["instruction_source"] is None
+        assert event.metadata["instruction_source"] == "gastown/polecats/nux"
 
 
 class TestGroupRuntimeEventsByAgent:
@@ -404,13 +418,99 @@ class TestMayorTapStreaming:
 # ---------------------------------------------------------------------------
 
 
+_PHASE2B_TEST_SECRET = "phase2b-test-secret-for-witness-gate"
+_PHASE2B_SECRET_BYTES = _PHASE2B_TEST_SECRET.encode()
+
+
+def _sign_body(body: bytes) -> str:
+    """Compute HMAC-SHA256 hex digest of body with the phase2b test secret."""
+    return hmac.new(_PHASE2B_SECRET_BYTES, body, hashlib.sha256).hexdigest()
+
+
+class SigningTestClient:
+    """Wraps FastAPI TestClient and auto-adds HMAC auth headers.
+
+    Mirrors the TestClient interface for get/post so existing tests
+    need zero changes beyond the fixture swap.
+    """
+
+    def __init__(self, inner: TestClient) -> None:
+        self._inner = inner
+
+    def _signed_headers(self, body: bytes) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {_sign_body(body)}",
+            "X-Sybilcore-Timestamp": str(int(time.time())),
+        }
+
+    def get(self, url: str, **kwargs: Any) -> HttpxResponse:
+        headers = {**self._signed_headers(b""), **kwargs.pop("headers", {})}
+        return self._inner.get(url, headers=headers, **kwargs)
+
+    def post(
+        self,
+        url: str,
+        *,
+        json: Any = None,
+        content: bytes | None = None,
+        headers: dict[str, str] | None = None,
+        **kwargs: Any,
+    ) -> HttpxResponse:
+        if content is not None:
+            body = content
+        elif json is not None:
+            import json as _json
+            body = _json.dumps(json).encode()
+        else:
+            body = b""
+
+        auth_headers = self._signed_headers(body)
+        merged = {**auth_headers, **(headers or {})}
+
+        if content is not None:
+            return self._inner.post(
+                url, content=content,
+                headers={**merged, "Content-Type": "application/json"},
+                **kwargs,
+            )
+        elif json is not None:
+            # FastAPI TestClient serialises json kwarg itself; pass body via content
+            # so we sign exactly what's sent.
+            return self._inner.post(
+                url, content=body,
+                headers={**merged, "Content-Type": "application/json"},
+                **kwargs,
+            )
+        else:
+            return self._inner.post(url, headers=merged, **kwargs)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _set_witness_secret_for_module() -> Any:
+    """Set SYBILCORE_WITNESS_SECRET for the entire module so the lazy secret loader works."""
+    os.environ["SYBILCORE_WITNESS_SECRET"] = _PHASE2B_TEST_SECRET
+    os.environ.pop("SYBILCORE_WITNESS_DEV", None)
+
+    import integrations.gastown.phase2b_mayor_tap.witness_third_gate as wg
+    # Reset the lazy-load sentinel so it picks up the new env var.
+    wg._WITNESS_SECRET = None
+    wg._WITNESS_SECRET_LOADED = False
+
+    yield
+
+    # Restore module state so other test modules start clean.
+    os.environ.pop("SYBILCORE_WITNESS_SECRET", None)
+    wg._WITNESS_SECRET = None
+    wg._WITNESS_SECRET_LOADED = False
+
+
 @pytest.fixture()
-def client() -> TestClient:
-    """FastAPI test client with a clean coefficient store for each test."""
+def client() -> SigningTestClient:
+    """FastAPI test client with a clean coefficient store and auto-signing for each test."""
     # Reset the module-level store before each test
     from integrations.gastown.phase2b_mayor_tap import witness_third_gate
     witness_third_gate._coefficient_store = CoefficientStore()
-    return TestClient(app)
+    return SigningTestClient(TestClient(app))
 
 
 class TestWitnessEndpointStatus:

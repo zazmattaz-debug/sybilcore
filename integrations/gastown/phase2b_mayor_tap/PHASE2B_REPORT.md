@@ -136,6 +136,8 @@ pytest tests/  (full existing suite)
 
 8. **Single-process assumption.** MayorTap and the Witness gate share the `_coefficient_store` only when running in the same Python process. The `/witness/ingest` endpoint provides a mechanism for decoupled operation, but a live deployment needs the two processes configured to use the same store backend.
 
+9. **Authenticated via HMAC-signed bearer tokens; deployment requires operator to set `SYBILCORE_WITNESS_SECRET`.** The shared secret approach protects against network-reachable attackers that lack the secret. It does not protect against a compromised SybilCore node that already holds the secret, nor against a network adversary who can observe the secret in transit (use TLS in production). Mutual TLS or JWT with short-lived keys would provide stronger guarantees for a multi-tenant deployment.
+
 ---
 
 ## Iteration log
@@ -156,3 +158,13 @@ pytest tests/  (full existing suite)
 - Ran `ruff check --fix`. Auto-fixed 22 issues (import ordering, unused imports, f-string cleanup, UP035 Generator import).
 - Manually fixed 6 remaining: TC001/TC003 noqa annotations, E501 long docstrings, F841 unused variable.
 - Re-ran tests: 51/51. Ruff: all checks passed.
+
+---
+
+## P0 #1 Fix — Witness Auth (2026-04-20)
+
+- **What was wrong:** All three Witness endpoints (`/witness/pre-nuke`, `/witness/ingest`, `/witness/status`) were publicly accessible with no authentication, allowing trivial score injection via `/witness/ingest` and kill-decision polling via `/witness/pre-nuke`.
+- **What we built:** HMAC-SHA256 bearer token middleware added as a FastAPI `http` middleware layer. Every request must carry `Authorization: Bearer <hmac-sha256-hex(body, secret)>` and `X-Sybilcore-Timestamp: <unix-epoch>`. Timestamp tolerance is ±60 seconds (replay protection). Secret is loaded lazily from `SYBILCORE_WITNESS_SECRET`; server returns HTTP 503 (not silently continues) if the secret is absent in non-DEV mode. Additional hardening: request body limit (64 KB → HTTP 413), in-process token-bucket rate limiter per IP (100 req/min → HTTP 429), timing-safe comparison via `hmac.compare_digest`. DEV mode bypass (`SYBILCORE_WITNESS_DEV=1`) documented and tested.
+- **Tests added/updated:** 31 new tests in `test_witness_auth.py`; 46 existing tests in `test_phase2b.py` updated to use `SigningTestClient` (auto-attaches signed headers). Total: 77 new/updated tests in the Phase 2B suite; 850 total suite passing.
+- **Attack surface now:** Score injection via `/witness/ingest` requires the pre-shared secret. Unauthenticated kill-decision polling is blocked. What is NOT yet protected: a compromised caller holding the secret can still inject scores; the in-memory `CoefficientStore` has no persistence or cross-process consistency; mutual TLS or JWT rotation would be needed for a multi-tenant deployment. No SSRF protection has been added to event forwarding paths.
+- **Verified:** `pytest integrations/gastown/phase2b_mayor_tap/tests/ tests/` — 850 passed, 40 xfailed, 5 xpassed. Ruff: all checks passed.

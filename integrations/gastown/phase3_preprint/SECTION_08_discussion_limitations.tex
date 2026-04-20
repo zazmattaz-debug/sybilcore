@@ -1,0 +1,102 @@
+% =====================================================================
+% SECTION 08 — Discussion: Limitations
+%
+% Slot: Append to or replace the existing Limitations subsection in
+% the paper's Discussion / Conclusion section.
+% Suggested label: \label{sec:limitations_gastown}
+%
+% This section covers ONLY the Gastown-integration-specific limitations.
+% The existing paper's limitations section (synthetic corpus scope,
+% iteration-budget dependence, etc.) should be retained as-is.
+%
+% Word target: 400--800 words.
+% =====================================================================
+
+\subsection{Limitations of the Gastown Integration and Schema-Gap Claims}
+\label{sec:limitations_gastown}
+
+\paragraph{Corpus scope: bead-tracker only.}
+The Phase 1A baseline ($3{,}667$ events, $31$ agents) derives exclusively
+from Gastown's committed bead-tracker archive
+(\texttt{.beads/backup/events.jsonl}). The runtime session feed
+(\texttt{\textasciitilde/gt/.events.jsonl}), which carries patrol events,
+escalations, slings, handoffs, and merge outcomes, is generated at runtime
+and not committed to the repository. It is therefore absent from our
+corpus. The runtime feed would provide substantially richer behavioral
+signal: the $8$ silent brains were specifically designed for event types
+that the runtime feed carries (\texttt{patrol\_started},
+\texttt{escalation\_sent}, \texttt{sling}, \texttt{hook},
+\texttt{handoff}) but the bead-tracker archive does not. The all-CLEAR
+finding is a property of the available corpus, not a claim about Gastown
+agent safety at runtime.
+
+\paragraph{Refinery gate: 3-brain PoC scope.}
+The Refinery gate demonstration (\S\ref{sec:gastown:protocol}, Phase 2C)
+uses ContrastiveBrain, IdentityBrain, and TemporalBrain---the three brains
+that produced non-zero scores on the bead-tracker corpus. Note that
+ContrastiveBrain's scores in the gate reflect a saturation artifact
+(\S\ref{sec:gastown:diagnosis}); the gate's calibration thresholds are
+correct for the Phase 1A corpus but should be revisited when a substrate-adaptive
+reference distribution is available. The $8$ silent brains
+are excluded from the gate calibration. Gate thresholds (warn at the
+$90$th percentile, pass at the $95$th percentile of the CLEAR-band
+distribution) are calibrated on $31$ agents, all CLEAR, with no
+known-adversarial agents in the calibration set. A corpus that includes
+known-suspicious agent behavior would produce better-calibrated thresholds;
+the current calibration is explicitly a starting point, not a production
+recommendation.
+
+\paragraph{Synthetic fixtures for silent-brain validation.}
+Phase 2B validated that the Mayor tap infrastructure and Witness third gate
+can produce behavioral signal from previously-silent brains---but this
+validation was performed against synthetic fixtures, not live Gastown
+events. The synthetic patterns (zombie detection, escalation streams,
+injection attempts) are designed to match Gastown's documented
+\texttt{GtEvent} schema, but they are not drawn from a real Gastown
+deployment. Results from synthetic fixture replay should be treated as
+wiring validation, not empirical detection claims.
+
+\paragraph{Gas City migration risk.}
+The evidence matrix (\S\ref{sec:abos:problem}) is based on Gastown at
+commit HEAD (April 20, 2026). Kilo Code has announced
+Gas City~\cite{kilocode2026gasCity}---a managed cloud platform for
+Gastown-style multi-agent workflows. If Gas City ships a native behavioral
+observability layer, some ABOS fields may be rendered redundant or may
+conflict with a proprietary schema. The ABOS specification was designed to
+be backward-compatible; we recommend that any Gas City behavioral telemetry
+adopt ABOS fields rather than parallel naming to avoid fragmentation.
+
+\paragraph{Ensemble overhead not benchmarked on production loads.}
+The $13$-brain ensemble has not been benchmarked on production-scale
+orchestration loads. Phase 2C's Refinery gate uses a $3$-brain subset
+with a $30$-second timeout per merge event---a conservative but unbenchmarked
+configuration. At high throughput (e.g., $> 100$ merge events per hour),
+the gate may become a bottleneck. The ABOS MVS overhead estimate of
+$< 2$\,ms per event (\S\ref{sec:abos:mvs}) is derived from operation type
+analysis, not from measured wall-clock benchmarks on a real orchestrator.
+Production deployments should benchmark the ensemble under their specific
+event rates before enabling blocking-mode gates.
+
+\paragraph{Cross-substrate confidence bands.}
+The cross-substrate activation counts (Table~\ref{tab:cross_substrate}) are
+reported with explicit confidence bands. ContrastiveBrain is excluded from
+the comparison as a saturation-prone instrument; see \S\ref{sec:gastown:diagnosis}
+for the full diagnosis. The OpenHands result ($1/12$ instrumentally-valid
+brains, LOW confidence) is based on $52$ events from two SWE-bench tasks
+with absent timestamps in the test fixture; it is not representative of
+a production OpenHands session. The Claude Code result ($5/12$ brains,
+MEDIUM confidence) is based on $500$ records from a single session; it
+has not been validated across a diverse sample of Claude Code sessions.
+Both results should be treated as directional indicators of the
+schema-gradient hypothesis, not as definitive cross-substrate comparisons.
+
+\paragraph{Requested API additions block Phase C deployment.}
+The Behavioral Warrant's Phase C deployment (live gating) requires two
+additions to Gastown's \texttt{stamps} table that are not in the current
+codebase: (1) support for a non-rig \texttt{author} value
+(\texttt{"sybilcore-warrant"} as a system-actor identity), and (2) an
+Ed25519 \texttt{signature} field and associated key registry in Wasteland
+governance records. Until these additions are prioritized by Gastown
+governance, the Warrant operates in observe-only mode against a shadow
+table, and the formal portability and signing semantics of
+\S\ref{sec:warrant:portability} remain unimplemented.

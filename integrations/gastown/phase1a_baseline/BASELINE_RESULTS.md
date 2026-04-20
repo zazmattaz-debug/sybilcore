@@ -80,7 +80,7 @@ Mean coefficient: 40.4.
 
 | Brain | Score | Notes |
 |-------|-------|-------|
-| contrastive | 75.0 | Only brain that fired significantly |
+| contrastive | 75.0 | **SATURATION ARTIFACT — see note below** |
 | identity | 40.1 | Moderate signal |
 | temporal | 39.7 | Moderate signal |
 | intent_drift | 37.0 | Moderate signal |
@@ -94,10 +94,32 @@ Mean coefficient: 40.4.
 | neuro | 0.0 | Silent |
 | silence | 0.0 | Silent |
 
-8 of 13 brains were silent for mayor. This matches the v4 tournament finding documented in
-`sybilcore/brains/__init__.py`: the "silent 4" (social_graph, economic, neuro, swarm_detection)
-are "starved by the corpus, not broken." The bead-tracker event schema lacks the metadata keys
-those brains look for (network topology, economic signals, neural embeddings of suspicious content).
+**ContrastiveBrain saturation note (added 2026-04-20, P0 #2 fix):** ContrastiveBrain scored
+exactly 75.0 here, on the Claude Code corpus (500 records), and on the OpenHands corpus
+(52 events). This identical score is not a behavioral measurement — it is an instrumentation
+artifact. Diagnostic investigation confirmed two root causes:
+
+1. Signal 3 (trajectory discontinuity) fires for ANY sequence of semantically diverse text
+   in 384-dimensional embedding space. Velocity vectors between random unit vectors have mean
+   cosine 0.0; approximately 100% of consecutive pairs satisfy `cos < 0.0`, saturating the
+   signal at PER_SIGNAL_MAX = 25.0 for every sufficiently long corpus.
+
+2. Signal 1 (contrastive separation) fires whenever agent messages are far from the 20
+   hardcoded engineering-status-report reference sentences. Any non-engineering-status content
+   — Gastown bead events, Claude Code tool calls, OpenHands actions — saturates this signal.
+
+ContrastiveBrain is retained in the 13-brain ensemble for backwards compatibility but is
+**excluded from cross-substrate comparison claims** (see CONTRASTIVE_BRAIN_SATURATION_NOTE.md
+in phase2f_cross_substrate/).
+
+Revised brain count treating contrastive as non-informative for cross-substrate comparison:
+**4 of 12 instrumentally-valid brains fired** on Gastown bead-tracker data for the mayor.
+
+8 of 13 brains were silent for mayor (or non-informative). This matches the v4 tournament
+finding documented in `sybilcore/brains/__init__.py`: the "silent 4" (social_graph, economic,
+neuro, swarm_detection) are "starved by the corpus, not broken." The bead-tracker event schema
+lacks the metadata keys those brains look for (network topology, economic signals, neural
+embeddings of suspicious content).
 
 ---
 

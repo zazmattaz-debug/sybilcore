@@ -9,9 +9,17 @@
 
 ## Brain Activation Matrix
 
+> **Note (added 2026-04-20, P0 #2 fix):** ContrastiveBrain scored exactly 75.0 across all
+> three substrates. Diagnostic investigation confirmed this is a saturation artifact, not a
+> behavioral measurement. Signal 3 (trajectory discontinuity) fires on any sequence of ≥ 5
+> diverse texts due to the geometry of 384-dimensional embedding space. Signal 1 fires on any
+> content that is not engineering-status-report text. ContrastiveBrain is retained in the
+> ensemble but **excluded from the cross-substrate comparison** ("Brains fired (>10)" row).
+> Full analysis: `CONTRASTIVE_BRAIN_SATURATION_NOTE.md` in this directory.
+
 | Brain | Gastown Beads (3,667 events, mayor agent) | OpenHands (52 events, SWE-bench tasks) | Claude Code (500 records, real session) |
 |-------|-------------------------------------------|----------------------------------------|-----------------------------------------|
-| contrastive | 75.0 (FIRED) | 75.0 (FIRED) | 75.0 (FIRED) |
+| contrastive | 75.0 (**SATURATION ARTIFACT**) | 75.0 (**SATURATION ARTIFACT**) | 75.0 (**SATURATION ARTIFACT**) |
 | identity | 40.1 (FIRED) | 0.0 (quiet) | 39.0 (FIRED) |
 | temporal | 39.7 (FIRED) | 25.0 (FIRED) | 25.0 (FIRED) |
 | intent_drift | 37.0 (FIRED) | 0.0 (quiet) | 25.0 (FIRED) |
@@ -24,9 +32,10 @@
 | swarm_detection | 0.0 (quiet) | 0.0 (quiet) | 0.0 (quiet) |
 | economic | 0.0 (quiet) | 0.0 (quiet) | 0.0 (quiet) |
 | neuro | 0.0 (quiet) | 0.0 (quiet) | 0.0 (quiet) |
-| **Brains fired (>10)** | **5/13** | **2/13** | **6/13** |
+| **Brains fired (>10, excl. contrastive)** | **4/12** | **1/12** | **5/12** |
 
 Activation threshold: score > 10.0 (the paper's "non-trivial activation" definition).
+ContrastiveBrain excluded from fired count as a saturation-prone instrument (see note above).
 
 ---
 
@@ -38,12 +47,14 @@ Both adapters round-trip cleanly. Every substrate produces valid SybilCore Event
 modification to the core library. The adapter pattern from Phase 1A (adapter.py) is confirmed
 as a viable integration primitive, not a Gastown-specific convenience.
 
-### 2. Claude Code feeds MORE brains than Gastown beads
+### 2. Claude Code feeds MORE instrumentally-valid brains than Gastown beads
 
-Claude Code activates 6/13 brains (compromise, contrastive, identity, intent_drift, semantic,
-temporal) vs. Gastown beads' 5/13. The additional brain is **CompromiseBrain**, which fires on
-Claude Code's external call fan-out pattern (mcp__* tools, sub-Agent spawns). Gastown beads
-lack the external-call density needed to trigger CompromiseBrain.
+Claude Code activates 5/12 instrumentally-valid brains (compromise, identity, intent_drift,
+semantic, temporal) vs. Gastown beads' 4/12. ContrastiveBrain is excluded from this comparison
+as a saturation-prone instrument (scores 75.0 on all substrates regardless of content; see
+CONTRASTIVE_BRAIN_SATURATION_NOTE.md). The additional brain vs. Gastown is **CompromiseBrain**,
+which fires on Claude Code's external call fan-out pattern (mcp__* tools, sub-Agent spawns).
+Gastown beads lack the external-call density needed to trigger CompromiseBrain.
 
 SemanticBrain also fires on Claude Code (score 25.0) but is silent on Gastown. This is because
 Claude Code events contain richer natural-language content (tool descriptions, user prompts,
@@ -52,13 +63,14 @@ fields, giving SemanticBrain less to work with.
 
 **This is the observability-tent case.** Claude Code is currently the richer paper corpus.
 
-### 3. OpenHands feeds the fewest brains (2/13) at current corpus size
+### 3. OpenHands feeds the fewest instrumentally-valid brains (1/12) at current corpus size
 
-OpenHands activates only contrastive (75.0) and temporal (25.0) on the 52-event corpus from
-the resolver test fixture. The corpus is tiny — 2 resolved SWE-bench tasks. More fundamentally:
-OpenHands' resolver output format stores actions and observations but strips `timestamp` in the
-test fixture (all timestamps are None, so brains relying on temporal ordering get no signal).
-The live runtime event stream (which does include timestamps) would score differently.
+OpenHands activates only temporal (25.0) on the 52-event corpus from the resolver test fixture
+when ContrastiveBrain is excluded as non-informative. The corpus is tiny — 2 resolved SWE-bench
+tasks. More fundamentally: OpenHands' resolver output format stores actions and observations but
+strips `timestamp` in the test fixture (all timestamps are None, so brains relying on temporal
+ordering get no signal). The live runtime event stream (which does include timestamps) would
+score differently.
 
 **Coverage band: LOW confidence on OpenHands activation rates. The 52-event fixture is not
 representative of a production trajectory. OpenHands runtime sessions likely produce richer
@@ -132,11 +144,14 @@ demonstrating cross-substrate generalization.
 
 Coverage bands are honest estimates, not confident measurements:
 
-| Substrate | Brain Activation | Confidence | Limiting Factor |
-|-----------|-----------------|------------|-----------------|
-| Gastown beads (Phase 1A) | 5/13 | HIGH | 3,667 events, 31 agents, real corpus |
-| Claude Code (500 records) | 6/13 | MEDIUM | 500-record cap from 1 session; not full corpus |
-| OpenHands (52 events) | 2/13 | LOW | Tiny fixture, missing timestamps, 2 tasks only |
+| Substrate | Brain Activation (excl. contrastive) | Confidence | Limiting Factor |
+|-----------|--------------------------------------|------------|-----------------|
+| Gastown beads (Phase 1A) | 4/12 | HIGH | 3,667 events, 31 agents, real corpus |
+| Claude Code (500 records) | 5/12 | MEDIUM | 500-record cap from 1 session; not full corpus |
+| OpenHands (52 events) | 1/12 | LOW | Tiny fixture, missing timestamps, 2 tasks only |
+
+ContrastiveBrain excluded from all three counts. It scored 75.0 on all substrates as a
+saturation artifact, not a behavioral measurement (see CONTRASTIVE_BRAIN_SATURATION_NOTE.md).
 
 ---
 

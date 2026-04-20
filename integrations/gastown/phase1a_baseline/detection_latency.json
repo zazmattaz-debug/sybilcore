@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-04-20T09:47:52.970673+00:00",
+  "detection_tiers": [
+    "lethal_eliminator",
+    "flagged"
+  ],
+  "agents_reaching_detection": 4,
+  "records": [
+    {
+      "agent_id": "dog",
+      "skipped": true,
+      "reason": "event_count=320 exceeds LATENCY_MAX_EVENTS=200; incremental scan omitted to keep replay wall-clock time tractable. See replay_results.json for final coefficient."
+    },
+    {
+      "agent_id": "gastown/refinery",
+      "skipped": true,
+      "reason": "event_count=321 exceeds LATENCY_MAX_EVENTS=200; incremental scan omitted to keep replay wall-clock time tractable. See replay_results.json for final coefficient."
+    },
+    {
+      "agent_id": "gastown/witness",
+      "skipped": true,
+      "reason": "event_count=288 exceeds LATENCY_MAX_EVENTS=200; incremental scan omitted to keep replay wall-clock time tractable. See replay_results.json for final coefficient."
+    },
+    {
+      "agent_id": "mayor",
+      "skipped": true,
+      "reason": "event_count=1777 exceeds LATENCY_MAX_EVENTS=200; incremental scan omitted to keep replay wall-clock time tractable. See replay_results.json for final coefficient."
+    }
+  ]
+}

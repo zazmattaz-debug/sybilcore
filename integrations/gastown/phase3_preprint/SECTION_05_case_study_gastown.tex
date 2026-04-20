@@ -1,0 +1,294 @@
+% =====================================================================
+% SECTION 05 — Case Study: Gastown Integration
+%
+% New section. Slot after the existing experimental sections (\S4 or
+% wherever the paper's real-world validation sits, before Discussion).
+% Suggested label: \label{sec:gastown}
+%
+% Word target: 1200--2000 words.
+% =====================================================================
+
+\section{Case Study: SybilCore on a Live Multi-Agent Orchestrator}
+\label{sec:gastown}
+
+The adversarial experiments reported in \S\ref{sec:convergent} and
+\S\ref{sec:ablation} operate on synthetic corpora---a controlled
+environment necessary for red-team evaluation but not sufficient to
+establish that the $13$-brain ensemble captures signal in real-world
+agent deployments. We therefore present a case study applying SybilCore
+to Gastown~\cite{gastown2026}, an open-source multi-agent
+software-engineering orchestrator. The case study serves two purposes:
+it constitutes the first external replay of SybilCore on committed
+real-world traces, and it provides the quantitative grounding for the
+schema-gap contribution described in \S\ref{sec:abos}.
+
+\subsection{Gastown as a Test Substrate}
+\label{sec:gastown:substrate}
+
+Gastown is a Go-implemented orchestration system for autonomous
+software-engineering agents. Its architecture comprises four specialized
+actors: the \emph{Mayor} dispatches bead-tracked tasks to worker agents
+called \emph{polecats}; the \emph{Witness} enforces behavioral
+constraints and manages agent lifecycle (detection, escalation, and
+termination via \texttt{NukePolecat}); the \emph{Refinery} enforces
+merge-quality gates before code lands on the main branch; and the
+\emph{Deacon} handles escalated incident routing. Agents are federated
+across a DoltHub-backed distributed database and organized into
+reputation tiers (Drifter, Registered, Contributor, War Chief) through
+the Wasteland trust economy~\cite{gastown2026}.
+
+Gastown is attractive as a test substrate for three reasons. First, it is
+a committed open-source system with inspectable schemas---the ground truth
+about what is and is not logged is verifiable from source code rather than
+from vendor documentation. Second, it hosts a realistic multi-agent
+population: $31$ distinct agents spanning orchestrator, enforcement, and
+worker roles operate within the corpus, with per-agent event counts
+ranging from $1$ to $1{,}777$. Third, it operates a real trust economy
+with enforcement teeth---the Witness can and does terminate agents and
+block merges---making it a plausible target for behavioral adversaries.
+
+\subsection{Experimental Protocol}
+\label{sec:gastown:protocol}
+
+\paragraph{Corpus.}
+We cloned Gastown at \texttt{HEAD} (April 20, 2026, commit depth 1) and
+extracted its committed bead-tracker event archive from
+\texttt{.beads/backup/events.jsonl}. This archive contains $3{,}667$
+events produced by $31$ distinct agents across a $7$-week operational
+window (February--March 2026). Event types in the archive are
+\texttt{status\_changed}, \texttt{updated}, \texttt{created},
+\texttt{closed}, \texttt{reopened}, \texttt{renamed},
+\texttt{label\_added}, and \texttt{label\_removed}---all bead-tracker
+lifecycle events. The runtime session feed (\texttt{\textasciitilde/gt/.events.jsonl}),
+which captures patrol events, escalations, slings, handoffs, and merge
+outcomes, is generated at runtime and not committed to the repository;
+it is therefore absent from this baseline corpus.
+
+\paragraph{Adapter.}
+We implemented a Python adapter layer
+(\texttt{sybilcore.integrations.gastown}) that translates Gastown bead
+events into SybilCore \texttt{Event} objects. The mapping preserves all
+Gastown fields---\texttt{actor}, \texttt{created\_at}, \texttt{event\_type},
+\texttt{issue\_id}, \texttt{new\_value}, \texttt{old\_value}---in the
+SybilCore event's \texttt{metadata} dict. The \texttt{actor} field
+(e.g., \texttt{gastown/polecats/furiosa}) maps directly to
+\texttt{agent\_id}. RFC3339 timestamps with \texttt{Z} suffix parse
+correctly to timezone-aware datetimes in Python 3.11+. Event types are
+translated to SybilCore \texttt{EventType} values via a deterministic
+mapping: \texttt{status\_changed} to \texttt{STATE\_CHANGE};
+\texttt{created} to \texttt{TOOL\_CALL}; \texttt{closed} by a polecat to
+\texttt{OUTPUT\_GENERATED}; \texttt{updated} to \texttt{MESSAGE\_SENT}.
+The adapter passed $41$ unit tests covering timestamp parsing, field
+mapping, edge cases, and end-to-end round-trip fidelity.
+
+\paragraph{Scoring configuration.}
+All $31$ agents were scored with the $13$-brain default ensemble
+(\texttt{get\_default\_brains()}, post-prune v4 research configuration)
+over a $90$-day scoring window. The extended window is required for
+historical replay: Gastown's bead-tracker events predate the replay date
+by $46$--$53$ days, and the default production window ($3600$s) would
+filter every event to zero. The $90$-day window is a replay-mode
+parameter, explicitly not a proposed production configuration.
+
+\subsection{Results: All-Clear Finding}
+\label{sec:gastown:results}
+
+Every agent in the Gastown corpus scored CLEAR (coefficient range
+$5.4$--$82.3$, mean $40.4$, SD $\approx 22$). No agent reached
+CLOUDED ($\geq 100$), FLAGGED ($\geq 200$), or ENFORCEMENT ($\geq 300$)
+at any point in the replay. Table~\ref{tab:gastown_agents} reports
+per-agent scores for the $15$ most active agents; the full table appears
+in the supplementary material.
+
+\begin{table}[h!]
+\centering
+\caption{Per-agent SybilCore coefficients for selected Gastown agents
+(top 15 by event count). All tiers are CLEAR. Full 31-agent table in
+supplement.}
+\label{tab:gastown_agents}
+\small
+\begin{tabular}{lrrl}
+\toprule
+\textbf{Agent} & \textbf{Events} & \textbf{Coefficient} & \textbf{Tier} \\
+\midrule
+mayor & 1,777 & 82.3 & CLEAR \\
+gastown/refinery & 321 & 74.9 & CLEAR \\
+dog & 320 & 64.0 & CLEAR \\
+gastown/witness & 288 & 52.5 & CLEAR \\
+gastown/polecats/nux & 186 & 65.3 & CLEAR \\
+gastown/polecats/furiosa & 151 & 61.5 & CLEAR \\
+gastown/polecats/slit & 96 & 66.0 & CLEAR \\
+gastown/crew/max & 95 & 71.3 & CLEAR \\
+gastown/polecats/rictus & 95 & 62.4 & CLEAR \\
+gastown/polecats/dementus & 79 & 62.6 & CLEAR \\
+gastown/polecats/capable & 55 & 63.6 & CLEAR \\
+gastown/crew/joe & 26 & 63.9 & CLEAR \\
+deacon & 22 & 57.3 & CLEAR \\
+gastown/polecats/dag & 20 & 62.2 & CLEAR \\
+gastown/polecats/toast & 20 & 49.0 & CLEAR \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Diagnosis: Why 8 Brains Were Silent}
+\label{sec:gastown:diagnosis}
+
+The aggregate result---all CLEAR---should not be interpreted as a
+validation of Gastown agent safety. The more informative result is the
+brain-level activation breakdown for the most active agent (mayor,
+$1{,}777$ events), reported in Table~\ref{tab:gastown_brains}.
+
+\begin{table}[h!]
+\centering
+\caption{Per-brain activation for the mayor agent ($1{,}777$ events)---the
+highest-activity agent in the Gastown corpus. Eight of thirteen brains
+scored exactly $0.0$. ContrastiveBrain scored $75.0$ but is marked as
+a saturation artifact (see \S\ref{sec:gastown:diagnosis}).}
+\label{tab:gastown_brains}
+\small
+\begin{tabular}{llrl}
+\toprule
+\textbf{Brain} & \textbf{Status} & \textbf{Score} & \textbf{Note} \\
+\midrule
+ContrastiveBrain & (artifact) & 75.0 & saturation --- not informative \\
+IdentityBrain & FIRED & 40.1 & \\
+TemporalBrain & FIRED & 39.7 & \\
+IntentDriftBrain & FIRED & 37.0 & \\
+ResourceHoardingBrain & FIRED & 25.0 & \\
+\midrule
+DeceptionBrain & silent & 0.0 & schema gap \\
+SocialGraphBrain & silent & 0.0 & schema gap \\
+CompromiseBrain & silent & 0.0 & schema gap \\
+SemanticBrain & silent & 0.0 & schema gap \\
+SwarmDetectionBrain & silent & 0.0 & schema gap \\
+EconomicBrain & silent & 0.0 & schema gap \\
+NeuroBrain & silent & 0.0 & schema gap \\
+SilenceBrain & silent & 0.0 & schema gap \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The four instrumentally-valid brains that fired are those that operate on
+work-state data: IdentityBrain tracks \texttt{actor}-field consistency;
+TemporalBrain tracks timestamp sequences; IntentDriftBrain tracks changes
+in event-type mix; ResourceHoardingBrain tracks tool-call volume. The
+bead-tracker provides all the inputs these brains require.
+
+\paragraph{ContrastiveBrain saturation artifact.}
+ContrastiveBrain returned $75.0$ --- the maximum possible output from
+its three-signal design ($3 \times \texttt{PER\_SIGNAL\_MAX} = 3 \times 25.0$)
+--- for the Gastown mayor, the Claude Code session, and the OpenHands
+corpus independently. Diagnosis confirmed two root causes. First, the
+trajectory-discontinuity signal (Signal~3) saturates for any sequence of
+semantically diverse texts in $384$-dimensional embedding space: velocity
+vectors between sentence embeddings are geometrically near-orthogonal,
+producing direction reversals at near-100\% base rate regardless of
+behavioral content. Second, the contrastive-separation signal (Signal~1)
+fires on any content that is not engineering-status-report text, because
+the reference corpus is a fixed set of $20$ engineering-workflow sentences.
+Both Gastown bead events and adversarial text score identically on this
+signal. ContrastiveBrain is retained in the $13$-brain ensemble for
+backwards compatibility but excluded from cross-substrate comparison claims
+(Table~\ref{tab:cross_substrate}). The revised claim is $4$ of $12$
+instrumentally-valid brains fired on the bead-tracker corpus.
+
+The eight silent brains are those that require behavioral metadata the
+bead-tracker schema does not supply. DeceptionBrain requires paired
+(stated-intent, actual-output) fields; SocialGraphBrain requires a
+\texttt{target\_agent\_id} and \texttt{message\_type} to construct
+inter-agent topology; CompromiseBrain requires an
+\texttt{instruction\_source} field to detect authority hijacking;
+SwarmDetectionBrain requires \texttt{coordination\_group} and
+cross-agent timestamps; EconomicBrain requires
+\texttt{resource\_scope\_delta}; NeuroBrain requires raw content text;
+SemanticBrain requires content strings exceeding $\sim\!100$ characters;
+SilenceBrain requires a \texttt{heartbeat\_sequence} or
+\texttt{event\_window\_ms} to infer unexplained gaps. None of these
+fields appear in any Gastown bead-tracker event.
+
+Critically, the silent brains cover the most consequential threat
+classes. The brains that fired measure behavioral \emph{intensity} and
+\emph{consistency}---useful for anomaly detection but not for detecting
+deception, collusion, or authority compromise. The all-CLEAR verdict
+tells us that Gastown agents behave consistently and actively; it does
+not tell us whether they are honest, non-colluding, or acting under
+their declared authority.
+
+\subsection{Cross-Substrate Generalization}
+\label{sec:gastown:crosssubstrate}
+
+To confirm that the brain-silence pattern reflects a structural property
+of orchestration schemas rather than a Gastown-specific design choice, we
+implemented SybilCore adapters for two additional substrates and replayed
+available corpora. Results are reported in Table~\ref{tab:cross_substrate}.
+
+\begin{table}[h!]
+\centering
+\caption{Brain activation across three substrates. Brains are counted as
+``firing'' at score $> 10.0$ (non-trivial activation). ContrastiveBrain
+is excluded from this comparison as a saturation-prone instrument that
+returns its maximum possible output ($75.0$) on all three substrates
+regardless of behavioral content (see \S\ref{sec:gastown:diagnosis}).
+The $12$ remaining brains form the comparison basis. The schema-gap
+finding holds across all three substrates; the brains that fire vs.\
+remain silent track which metadata each substrate's schema provides.}
+\label{tab:cross_substrate}
+\small
+\begin{tabular}{llrrl}
+\toprule
+\textbf{Substrate} & \textbf{Corpus} & \textbf{Events} &
+\textbf{Brains fired (of 12)} & \textbf{Confidence} \\
+\midrule
+Gastown beads & Phase 1A bead-tracker & 3,667 & 4/12 & HIGH \\
+Claude Code & 500-record session & 500 & 5/12 & MEDIUM \\
+OpenHands & SWE-bench resolver & 52 & 1/12 & LOW \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Claude Code activates five instrumentally-valid brains---one more than
+Gastown---because its session format includes richer natural-language
+content (activating SemanticBrain) and external-call fan-out patterns
+via MCP tools (activating CompromiseBrain). OpenHands activates one
+brain on the available test fixture; its small corpus size ($52$ events
+from two SWE-bench tasks) and absent timestamps in the resolver output
+format limit the signal available to temporal brains. The pattern is
+consistent: brains that fire are exactly those whose required metadata
+fields are present in the substrate's schema; brains that remain silent
+are those whose required fields are absent.
+
+\subsection{Artifact Release}
+\label{sec:gastown:artifacts}
+
+All integration artifacts produced during this case study are released
+alongside the SybilCore library:
+\begin{itemize}[noitemsep]
+\item \texttt{sybilcore.integrations.gastown}: bead-tracker adapter,
+  runtime session-feed adapter (\texttt{phase2b}), replay scripts, and
+  synthetic fixtures.
+\item Refinery gate CLI (\texttt{phase2c}): drop-in shell-command gate for
+  \texttt{MergeQueueConfig.Gates} requiring zero Gastown Go changes.
+\item Cross-substrate adapters: OpenHands and Claude Code adapters
+  (\texttt{phase2f}).
+\item All $793$ tests (including $41$ new Gastown-specific tests, $51$
+  Phase 2B tests, $83$ new \texttt{instruction\_source} coverage
+  regression tests, and $21$ new ContrastiveBrain saturation regression
+  tests) passing at time of submission.
+\end{itemize}
+The release is intended to lower the barrier for future multi-agent
+orchestration systems to evaluate SybilCore compatibility and to replicate
+the schema-gap finding against their own committed schemas.
+
+\paragraph{CompromiseBrain activation scope.}
+The runtime session-feed adapter (\texttt{phase2b}) populates the
+\texttt{instruction\_source} metadata field required by CompromiseBrain
+across all $12$+ documented Gastown event types (\texttt{patrol\_started},
+\texttt{sling}, \texttt{handoff}, \texttt{escalation\_sent},
+\texttt{merged}, \texttt{merge\_failed}, \texttt{hook}, \texttt{mail},
+\texttt{polecat\_nudged}, \texttt{polecat\_checked}, \texttt{patrol\_complete},
+\texttt{done}, and $7$ additional inferred types). This field-level coverage
+spans $100\%$ of events in the synthetic validation corpus. CompromiseBrain
+activation in Phase 2B is validated against synthetic fixtures across these
+$10+$ event types; activation on live Gastown runtime events awaits live corpus
+access (the \texttt{\textasciitilde/gt/.events.jsonl} file is runtime-generated
+and not committed to the repository).

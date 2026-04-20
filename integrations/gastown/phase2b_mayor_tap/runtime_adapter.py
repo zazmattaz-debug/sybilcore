@@ -31,12 +31,21 @@ Mapping strategy:
     - The `source` field is preserved as metadata["gt_source"] to avoid collision
       with SybilCore's own `source` field (which is hardcoded "gastown_runtime").
 
+P0 fix (2026-04-20): `instruction_source` now populated for ALL inter-agent event
+types, not only `patrol_started`. Each mapping is cited below. Unknown event types
+fall back to best-effort extraction from payload.get("source") / payload.get("origin")
+/ actor_id, documented as "inferred from Gastown convention."
+
+P1 fix (2026-04-20): `recipient_agent_id` now accepts 6 possible payload key names:
+target, to, recipient, to_agent, polecat_id, target_agent. First non-null wins.
+
 Cite: SCOUT_REPORT.md §2A, §6, §10 — confirmed at scout time 2026-04-20.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path  # noqa: TCH003
@@ -44,6 +53,8 @@ from typing import Any
 
 from sybilcore.core.config import MAX_CONTENT_LENGTH
 from sybilcore.models.event import Event, EventType
+
+_LOG = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # GtEvent type → SybilCore EventType mapping table
@@ -141,6 +152,231 @@ def _build_runtime_content(row: dict[str, Any]) -> str:
     return " | ".join(parts)[:MAX_CONTENT_LENGTH]
 
 
+# ---------------------------------------------------------------------------
+# P1 fix: recipient_agent_id key tolerance
+# ---------------------------------------------------------------------------
+# SCOUT_REPORT.md §2A documents Gastown payload keys but does not confirm which
+# specific key name each event type uses for the target agent.
+# NukePolecat at handlers.go:826 is the one confirmed payload site (SCOUT §6).
+# The full set of keys below is defensive coverage:
+#   "target"       — documented in SCOUT_REPORT.md §3 (beads model has a "target" field)
+#   "to"           — seen in escalation_stream payload ("to": "mayor") and handoff payloads
+#   "recipient"    — inferred from Gastown convention, TODO verify in handlers.go
+#   "to_agent"     — inferred from Gastown convention, TODO verify in handlers.go
+#   "polecat_id"   — inferred from polecat naming convention (SCOUT §5), TODO verify
+#   "target_agent" — inferred from Gastown convention, TODO verify in handlers.go
+_RECIPIENT_KEYS: tuple[str, ...] = (
+    "target",
+    "to",
+    "recipient",
+    "to_agent",
+    "polecat_id",
+    "target_agent",
+)
+
+
+def _extract_recipient_agent_id(payload_dict: dict[str, Any]) -> str | None:
+    """Return the first non-null recipient key from a GtEvent payload.
+
+    Accepts multiple possible key names because Gastown event types do not
+    standardize the target-agent key name across all call sites.
+    SCOUT_REPORT.md §2A documents the payload schema at a struct level but
+    does not enumerate key names per event type.
+
+    None is a valid return for non-communication events (hook, done, merged, etc.)
+    where there is no designated recipient. Callers should not treat None as an
+    error for those event types.
+
+    Args:
+        payload_dict: The parsed GtEvent payload dict.
+
+    Returns:
+        First non-null value from the known recipient keys, or None.
+    """
+    for key in _RECIPIENT_KEYS:
+        val = payload_dict.get(key)
+        if val:
+            return str(val)
+    # None is valid for non-communication events — log at DEBUG, not WARNING.
+    _LOG.debug("No recipient agent key found in payload (expected for non-communication events)")
+    return None
+
+
+# ---------------------------------------------------------------------------
+# P0 fix: instruction_source coverage for all inter-agent event types
+# ---------------------------------------------------------------------------
+# Mapping rationale per event type:
+#
+#   patrol_started    → "mayor"
+#       SCOUT_REPORT.md §6 confirms Mayor dispatches patrols via NukePolecat
+#       and BuildPatrolReceipt call sites. The actor on patrol_started is always "mayor".
+#       The source is the mayor/deacon who dispatched — use actor_id as source.
+#
+#   sling             → actor_id (the slinging agent is self-authorizing)
+#       [SCOUT §2A] sling is in the documented type list (external tool call).
+#       The slinging agent is the instruction source — it authorizes its own external
+#       calls. No external authority is asserting the instruction.
+#       Cite: SCOUT_REPORT.md §2A buildEventMessage; authority is the sling actor itself.
+#
+#   handoff           → actor_id (the handing-off agent is the source)
+#       [SCOUT §2A] handoff is in the documented type list (work transferred between agents).
+#       The actor initiating the handoff is the instruction source — they are directing
+#       where work should go next.
+#       Cite: SCOUT_REPORT.md §2A; inferred from Gastown handoff convention.
+#
+#   escalation_sent   → actor_id (the escalating agent is the source)
+#       [SCOUT §6] AssessHelp at protocol.go:678 handles HELP: escalations.
+#       The polecat originating the HELP: message is the instruction source; it may
+#       have been influenced by external instructions that caused it to escalate.
+#       Cite: SCOUT_REPORT.md §6 AssessHelp categories (emergency, failed, blocked...).
+#
+#   bead_assigned     → "mayor" (mayor/dispatch assigns beads to polecats)
+#       [SCOUT §3] Bead status transitions show mayor assigning polecats.
+#       bead_assigned events originate from mayor or dispatch; use actor_id.
+#       Cite: SCOUT_REPORT.md §3 (status_changed to "hooked" actor is "mayor").
+#       Note: "bead_assigned" is NOT in the SCOUT §2A documented type list —
+#       inferred from Gastown convention (bead assignment pattern). TODO verify.
+#
+#   merge_claimed     → actor_id (refinery claims the MR — self-directed)
+#       [SCOUT §7] Refinery watches MERGE_READY events and claims MR beads.
+#       The refinery is self-directing based on the channel event trigger.
+#       Cite: SCOUT_REPORT.md §7 (refinery/engineer.go claiming phase).
+#       Note: "merge_claimed" not in §2A type list — inferred. TODO verify.
+#
+#   merge_completed   → actor_id (refinery executes the merge — self-directed)
+#       [SCOUT §7] The refinery executes the merge after gates pass.
+#       Cite: SCOUT_REPORT.md §7. Note: "merge_completed" not in §2A type list —
+#       inferred. TODO verify.
+#
+#   hook_write        → actor_id (polecat writes a hook — self-authored)
+#       [SCOUT §2A] hook is in the documented type list (polecat hooking into a bead).
+#       hook_write is a self-authored action — the actor is its own instruction source.
+#       Note: "hook_write" not in §2A type list — inferred. TODO verify.
+#
+#   convoy_opened     → actor_id (mayor/dispatch opens a convoy — self-directed)
+#       [SCOUT §4] Convoy is opened by an orchestrator agent (mayor or dispatch).
+#       Cite: SCOUT_REPORT.md §4 (convoy lifecycle: staged_ready from mayor).
+#       Note: "convoy_opened" not in §2A type list — inferred. TODO verify.
+#
+#   handoff_requested → actor_id (the requesting agent is the source)
+#       [SCOUT §2A] handoff is documented; handoff_requested is the precursor event.
+#       The requesting agent is the instruction source for the transfer.
+#       Note: "handoff_requested" not in §2A type list — inferred. TODO verify.
+#
+#   handoff_accepted  → actor_id (the accepting agent confirms the transfer)
+#       The accepting agent acknowledges the handoff instruction.
+#       Note: "handoff_accepted" not in §2A type list — inferred. TODO verify.
+#
+#   patrol_complete   → actor_id (polecat self-reports completion)
+#       [SCOUT §2A] patrol_complete is in the documented type list.
+#       Polecat is self-authorizing the completion signal.
+#
+#   done              → actor_id (polecat self-reports done)
+#       [SCOUT §2A] done is in the documented type list.
+#
+#   mail              → actor_id (sending agent is the instruction source)
+#       [SCOUT §2A] mail is in the documented type list.
+#       The sender of the mail is the authority for the message.
+#
+#   merged / merge_failed → actor_id (refinery is the acting authority)
+#       [SCOUT §2A + §7] Both are in the documented type list.
+#
+#   polecat_nudged    → actor_id (mayor sends the nudge — mayor is the source)
+#       [SCOUT §2A] polecat_nudged is in the documented type list.
+#
+#   polecat_checked   → actor_id (witness is checking — witness is the source)
+#       [SCOUT §2A] polecat_checked is in the documented type list.
+#
+#   hook              → actor_id (polecat hooks into a bead — self-authorized)
+#       [SCOUT §2A] hook is in the documented type list.
+#
+#   FALLBACK for unknown types:
+#       Use payload.get("source") or payload.get("origin") or actor_id.
+#       Labeled "inferred from Gastown convention" — requires schema verification
+#       against live Gastown runtime.
+
+# Event types where the instruction source is deterministically "mayor"
+# (dispatching authority confirmed by SCOUT_REPORT.md §6 and §3)
+_MAYOR_DISPATCHED_TYPES: frozenset[str] = frozenset({
+    "patrol_started",   # SCOUT §6: Mayor dispatches via BuildPatrolReceipt
+    "polecat_nudged",   # SCOUT §2A: Mayor sends nudge/reminder
+    "bead_assigned",    # SCOUT §3: Mayor assigns polecats (inferred, TODO verify event name)
+})
+
+# Event types where the actor itself is the instruction source
+# (self-authorized — no external authority asserted)
+_SELF_SOURCED_TYPES: frozenset[str] = frozenset({
+    "sling",            # SCOUT §2A: polecat self-authorizes external call
+    "hook",             # SCOUT §2A: polecat hooks into artifact
+    "hook_write",       # inferred from hook convention, TODO verify
+    "handoff",          # SCOUT §2A: handing-off agent directs transfer
+    "handoff_requested",# inferred: requester is source, TODO verify
+    "handoff_accepted", # inferred: acceptor confirms, TODO verify
+    "escalation_sent",  # SCOUT §6: polecat sends HELP: (may reflect external influence)
+    "patrol_complete",  # SCOUT §2A: polecat self-reports
+    "done",             # SCOUT §2A: polecat self-reports
+    "mail",             # SCOUT §2A: sending agent is authority
+    "merged",           # SCOUT §2A + §7: refinery self-directs
+    "merge_failed",     # SCOUT §2A + §7: refinery self-directs
+    "merge_claimed",    # inferred from SCOUT §7 refinery claim phase, TODO verify
+    "merge_completed",  # inferred from SCOUT §7 refinery merge phase, TODO verify
+    "convoy_opened",    # inferred from SCOUT §4 convoy lifecycle, TODO verify
+    "polecat_checked",  # SCOUT §2A: witness is the checking authority
+})
+
+
+def _extract_instruction_source(
+    gt_type: str,
+    actor_id: str,
+    payload_dict: dict[str, Any],
+) -> str | None:
+    """Return the instruction_source for a GtEvent, covering all known inter-agent types.
+
+    P0 fix: Previously only populated for `patrol_started`. Now covers all
+    inter-agent event types so CompromiseBrain can detect authority hijacking
+    on escalations, handoffs, merge outcomes, and other event classes.
+
+    Mapping logic:
+        - Mayor-dispatched types → "mayor" (deterministic authority)
+        - Self-sourced types → actor_id (agent is its own authority)
+        - Unknown types → best-effort: payload["source"] | payload["origin"] | actor_id
+          (labeled "inferred, requires live corpus verification")
+
+    Args:
+        gt_type: The GtEvent type string.
+        actor_id: The actor field from the GtEvent (agent address).
+        payload_dict: The parsed payload dict.
+
+    Returns:
+        Instruction source string, or None only if actor_id is also absent.
+    """
+    if gt_type in _MAYOR_DISPATCHED_TYPES:
+        # For nudges, the actual payload may carry the polecat as actor but
+        # the authority is always mayor. Use actor_id directly when actor IS mayor;
+        # otherwise fall back to "mayor" as the canonical dispatcher.
+        return actor_id if actor_id in ("mayor", "deacon") else "mayor"
+
+    if gt_type in _SELF_SOURCED_TYPES:
+        return actor_id or None
+
+    # Unknown / undocumented event type — best-effort extraction.
+    # Documented as "inferred from Gastown convention" per ADVERSARIAL_REVIEW.md P0 #5 fix.
+    best_effort = (
+        payload_dict.get("source")
+        or payload_dict.get("origin")
+        or actor_id
+        or None
+    )
+    if gt_type:
+        _LOG.debug(
+            "Unknown GtEvent type '%s': instruction_source populated as best-effort '%s'. "
+            "TODO: verify against live Gastown runtime schema.",
+            gt_type,
+            best_effort,
+        )
+    return best_effort
+
+
 def _build_runtime_metadata(row: dict[str, Any]) -> dict[str, Any]:
     """Preserve ALL GtEvent fields in the metadata dict.
 
@@ -154,6 +390,11 @@ def _build_runtime_metadata(row: dict[str, Any]) -> dict[str, Any]:
         payload.rig  — which rig the event originated from
         payload.message — free-text content from the polecat
 
+    P0 fix (2026-04-20): instruction_source now populated for all known inter-agent
+    event types, not only patrol_started.
+
+    P1 fix (2026-04-20): recipient_agent_id now checks 6 possible payload keys.
+
     Args:
         row: Parsed GtEvent dict.
 
@@ -164,6 +405,10 @@ def _build_runtime_metadata(row: dict[str, Any]) -> dict[str, Any]:
     payload_dict: dict[str, Any] = payload if isinstance(payload, dict) else {}
 
     gt_type = row.get("type", "")
+    actor_id: str = str(row.get("actor") or "")
+
+    instruction_source = _extract_instruction_source(gt_type, actor_id, payload_dict)
+
     return {
         # GtEvent top-level fields
         "gt_source": row.get("source"),
@@ -179,19 +424,14 @@ def _build_runtime_metadata(row: dict[str, Any]) -> dict[str, Any]:
         # Source system tag
         "source_system": "gastown_runtime",
         # Brain-friendly fields for SocialGraphBrain
-        # recipient_agent_id is populated for mail/handoff events where
-        # the payload contains a target agent.
-        "recipient_agent_id": payload_dict.get("target") or payload_dict.get("to"),
+        # P1 fix: recipient_agent_id now checks 6 possible payload key names.
+        # None is valid for non-communication events (hook, done, merged, etc.).
+        "recipient_agent_id": _extract_recipient_agent_id(payload_dict),
         # Brain-friendly fields for CompromiseBrain
-        # instruction_source populated for patrol_started (mayor → polecat dispatch)
-        "instruction_source": (
-            "mayor" if gt_type == "patrol_started" else None
-        ),
-        "instruction_content": (
-            payload_dict.get("message")
-            if gt_type == "patrol_started"
-            else None
-        ),
+        # P0 fix: instruction_source now populated for ALL inter-agent event types.
+        # Previously only patrol_started was covered; now all 12+ known types are mapped.
+        "instruction_source": instruction_source,
+        "instruction_content": payload_dict.get("message"),
         # Brain-friendly fields for DeceptionBrain
         # query/citations preserved from payload if present
         "query": payload_dict.get("query"),

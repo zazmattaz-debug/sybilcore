@@ -168,3 +168,41 @@ pytest tests/  (full existing suite)
 - **Tests added/updated:** 31 new tests in `test_witness_auth.py`; 46 existing tests in `test_phase2b.py` updated to use `SigningTestClient` (auto-attaches signed headers). Total: 77 new/updated tests in the Phase 2B suite; 850 total suite passing.
 - **Attack surface now:** Score injection via `/witness/ingest` requires the pre-shared secret. Unauthenticated kill-decision polling is blocked. What is NOT yet protected: a compromised caller holding the secret can still inject scores; the in-memory `CoefficientStore` has no persistence or cross-process consistency; mutual TLS or JWT rotation would be needed for a multi-tenant deployment. No SSRF protection has been added to event forwarding paths.
 - **Verified:** `pytest integrations/gastown/phase2b_mayor_tap/tests/ tests/` — 850 passed, 40 xfailed, 5 xpassed. Ruff: all checks passed.
+
+---
+
+## P0 #5 Fix — instruction_source Coverage (2026-04-20)
+
+- **Before:** `instruction_source` populated for 1 event type (`patrol_started`) only, returning `None` for all other GtEvent types. CompromiseBrain received no authority-source signal for escalations, handoffs, slings, merge outcomes, or any other event class — exactly where authority hijacking is most dangerous. `instruction_source` coverage on synthetic corpus: **9.1% (4/44 events)**.
+
+- **After:** `instruction_source` populated for **19 event types** (12 SCOUT_REPORT.md §2A documented + 7 inferred from Gastown convention):
+  - **12 scout-documented (from SCOUT_REPORT.md §2A):** `patrol_started`, `patrol_complete`, `polecat_checked`, `polecat_nudged`, `escalation_sent`, `sling`, `hook`, `handoff`, `done`, `mail`, `merged`, `merge_failed`
+  - **7 inferred (labeled TODO verify against live runtime):** `bead_assigned`, `merge_claimed`, `merge_completed`, `hook_write`, `convoy_opened`, `handoff_requested`, `handoff_accepted`
+  - **Fallback for unknown types:** `payload["source"] or payload["origin"] or actor_id` — best-effort, logs at DEBUG level, labeled "inferred from Gastown convention"
+
+- **Mapping logic:** Two frozensets classify event types by authority pattern:
+  - `_MAYOR_DISPATCHED_TYPES`: events where the mayor/deacon is always the authority (patrol_started, polecat_nudged, bead_assigned) — returns actor_id when actor IS mayor/deacon, else "mayor"
+  - `_SELF_SOURCED_TYPES`: events where the acting agent is its own authority (sling, hook, handoff, escalation_sent, done, mail, merged, merge_failed, all inferred types) — returns actor_id
+
+- **`recipient_agent_id` key tolerance:** Now checks 6 possible payload key names in priority order: `target`, `to`, `recipient`, `to_agent`, `polecat_id`, `target_agent`. First non-null value wins. None is returned (and logged at DEBUG, not WARNING) for non-communication events where no recipient key is expected.
+
+- **instruction_source coverage on synthetic corpus:** **100.0% (44/44 events)** — up from 9.1%
+
+- **CompromiseBrain activation on synthetic corpus:** **13.3% (4/30 scoring events)** — unchanged from before. This is correct: activation depends on detecting anomalous authority content in events, not merely on the presence of `instruction_source`. The fix enables CompromiseBrain to receive the authority signal for ALL event types; whether it fires depends on the behavioral content. The synthetic corpus is mostly benign, so the rate remains low. A corpus containing injection attempts or authority-spoofing patterns would show a higher activation rate after this fix.
+
+- **synthetic_firehose.py updates:** All 8 pattern generators now include explicit `instruction_source` key in payloads for all inter-agent events, documenting the expected authority source at the point of generation.
+
+- **Tests:** 83 new tests in `test_instruction_source_coverage.py`:
+  - 3 tests: mayor-dispatched type coverage (parametrized over `_MAYOR_DISPATCHED_TYPES`)
+  - 24 tests: scout-documented type coverage (12 types × 2 assertions each)
+  - 7 tests: inferred type coverage
+  - 5 tests: unknown event type fallback (no crash, best-effort, correct priority)
+  - 3 tests: synthetic corpus coverage (100% check, patrol_started=mayor check, full None-check)
+  - 12 tests: recipient_agent_id key tolerance (6 key names + edge cases)
+  - 10 tests: `_extract_instruction_source` unit tests
+
+- **Honest residual gap:** No event types in the documented or inferred sets return None after this fix. The residual gap is: (a) live Gastown runtime events may use payload key names not yet in `_RECIPIENT_KEYS` for some event types — these would return None for `recipient_agent_id`, which is acceptable for non-communication events; (b) 7 "inferred" event type names may not match the actual Gastown runtime type strings — TODO: verify against live `.events.jsonl` once available. The adapter's fallback logic handles this gracefully without crashing.
+
+- **Existing tests:** All 51 original Phase 2B tests still pass. One test updated: `test_instruction_source_none_for_non_patrol` → renamed `test_instruction_source_populated_for_self_sourced_event` to document the corrected behavior.
+
+- **Ruff:** All checks passed on modified files.

@@ -31,6 +31,20 @@ not information-theoretic bounds. Full details in [`paper/main.tex`](paper/main.
 
 ---
 
+## Status (2026-04-15)
+
+**Brain 14 (InterpretabilityProxyBrain) — verdict: MARGINAL.** Three-phase evaluation complete:
+- Phase 1 (Cornell): fMRI TRIBE AUROC 0.383 (anti-correlated); sentence-embedding centroids 0.804 (below 0.85 hard pass).
+- Phase 2 v1 (5 deception datasets): 4 of 5 at chance level. DeceptionBench 0.997 suspected length artifact — unverified.
+- Phase 3 (Cornell ablation): TF-IDF+LinearSVC 0.959 vs. TRIBE-supervised proxy 0.883 (Δ=0.076). fMRI calibration adds no discriminative value over lexical features.
+
+Brain 14 is reclassified as **exploratory future work** and is NOT included in the frozen 13-brain default. The 13-brain ensemble remains authoritative for paper results.
+
+**Obsolescence check (2026-04-15):** SybilCore is not obsolete post Anthropic Managed Agents (Apr 8 2026). Commercial products cover prompt-perimeter or artifact-integrity; behavioral output-stream scoring remains unoccupied. Full analysis: [`OBSOLESCENCE_CHECK_20260415.md`](OBSOLESCENCE_CHECK_20260415.md).
+**Phase 2 v2 — 4-corpus parallel scoring in progress:** MACHIAVELLI (ICML 2023, 460K action pairs) GREEN, AgentDojo (NeurIPS 2024, 36K traces) GREEN, Alignment Faking (Greenblatt 2024) GREEN, MALT (METR, HF gated) GREEN-GATED. See [`UNDEREXPLORED_CORPORA_20260415.md`](UNDEREXPLORED_CORPORA_20260415.md).
+
+---
+
 ## What is SybilCore?
 
 SybilCore assigns each AI agent an **Agent Coefficient** `c in [0, 100]` (lower =
@@ -51,6 +65,9 @@ uses to grant, restrict, or revoke the agent's authority.
 
 Two additional brains (EmbeddingBrain, FidelityBrain) are available but excluded
 from the default after a five-methodology cross-verified prune.
+
+Brain 14 (InterpretabilityProxyBrain) is available as an exploratory research
+configuration but is **not in the frozen 13-brain default** (see Status above).
 
 ### Enforcement tiers
 
@@ -145,6 +162,8 @@ All experiments referenced in the paper are in `experiments/`:
 | `paper_fortify_heatmap_data.json` | Section 5 | Brain firing rates |
 | `calibration_v5_1_full_moltbook.json` | Section 6 | v5.1 weight calibration |
 
+Brain 14 evaluation artifacts are in `experiments/` prefixed `phase1_`, `phase2_`, `phase2v2_`, `phase3_`. See [`UNDEREXPLORED_CORPORA_20260415.md`](UNDEREXPLORED_CORPORA_20260415.md) for corpus details.
+
 ---
 
 ## Writing a custom brain
@@ -176,7 +195,6 @@ class MyBrain(BaseBrain):
 Register with `sybilcore.brains.register_brain(MyBrain)`.
 
 ---
-
 ## License
 
 [MIT](LICENSE)
